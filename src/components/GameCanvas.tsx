@@ -27,7 +27,8 @@ export const GameCanvas: React.FC = () => {
   const isDraggingRef = useRef<boolean>(false);
   const lastPointerPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const orbitYawRef = useRef<number>(0);
-  const orbitPitchRef = useRef<number>(0);
+  const orbitPitchRef = useRef<number>(0.25);
+  const cameraDistanceRef = useRef<number>(4.8);
 
   const [selectedBikeId, setSelectedBikeId] = useState<string>(() => {
     return localStorage.getItem(SELECTED_BIKE_KEY) || DEFAULT_BIKE_ID;
@@ -91,7 +92,8 @@ export const GameCanvas: React.FC = () => {
     physicsRef.current.reset();
     environmentRef.current?.reset();
     orbitYawRef.current = 0;
-    orbitPitchRef.current = 0;
+    orbitPitchRef.current = 0.25;
+    cameraDistanceRef.current = 4.8;
     isDraggingRef.current = false;
 
     if (bikePartsRef.current) {
@@ -185,7 +187,7 @@ export const GameCanvas: React.FC = () => {
     };
   }, [handleRestart, isGarageOpen]);
 
-  // Pointer / Mouse Camera Look Handlers (Item 2)
+  // Pointer / Mouse Camera Look Handlers
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     isDraggingRef.current = true;
     lastPointerPosRef.current = { x: e.clientX, y: e.clientY };
@@ -198,13 +200,13 @@ export const GameCanvas: React.FC = () => {
     const dy = e.clientY - lastPointerPosRef.current.y;
     lastPointerPosRef.current = { x: e.clientX, y: e.clientY };
 
-    // Drag right rotates camera around bike to the right
-    orbitYawRef.current -= dx * 0.007;
-    // Drag down elevates camera, drag up looks up
+    // Drag horizontally rotates camera 360 around rider
+    orbitYawRef.current -= dx * 0.006;
+    // Drag vertically elevates/lowers camera pitch around rider
     orbitPitchRef.current = THREE.MathUtils.clamp(
       orbitPitchRef.current + dy * 0.005,
-      -0.35,
-      0.8
+      -0.15,
+      1.35
     );
   }, []);
 
@@ -215,6 +217,15 @@ export const GameCanvas: React.FC = () => {
     } catch {
       // ignore
     }
+  }, []);
+
+  // Mouse wheel zoom camera distance
+  const onWheel = useCallback((e: React.WheelEvent) => {
+    cameraDistanceRef.current = THREE.MathUtils.clamp(
+      cameraDistanceRef.current + e.deltaY * 0.005,
+      2.5,
+      14.0
+    );
   }, []);
 
   // --- Main Three.js Scene Setup & Loop (Runs ONLY ONCE on mount) ---
@@ -394,38 +405,38 @@ export const GameCanvas: React.FC = () => {
         }
       }
 
-      // --- Update Dynamic Camera with Mouse Orbit & Auto-Return ---
-      if (!isDraggingRef.current) {
-        // Smoothly return to rear chase view when mouse released
-        orbitYawRef.current = THREE.MathUtils.lerp(orbitYawRef.current, 0, 4.5 * delta);
-        orbitPitchRef.current = THREE.MathUtils.lerp(orbitPitchRef.current, 0, 4.5 * delta);
-      }
+      // --- Update Dynamic Camera with Mouse Orbit & Centered Target ---
+      const targetX = state.positionX;
+      const targetY = 1.1 + state.pitch * 0.4;
+      const targetZ = state.positionZ;
 
       if (!state.isCrashed) {
         const currentYaw = orbitYawRef.current;
         const currentPitch = orbitPitchRef.current;
+        const dist = cameraDistanceRef.current + state.pitch * 0.3;
 
-        const distance = 4.8 + state.pitch * 0.4;
-        const baseHeight = 2.1 + state.pitch * 0.5;
+        // Spherical orbit around character target
+        const cosPitch = Math.cos(currentPitch);
+        const sinPitch = Math.sin(currentPitch);
+        const sinYaw = Math.sin(currentYaw);
+        const cosYaw = Math.cos(currentYaw);
 
-        // Spherical offset around bike center
-        const offsetX = Math.sin(currentYaw) * distance;
-        const offsetZ = -Math.cos(currentYaw) * distance;
-        const targetCamY = Math.max(0.6, baseHeight + currentPitch * 2.8);
+        const offsetX = sinYaw * cosPitch * dist;
+        const offsetY = sinPitch * dist;
+        const offsetZ = -cosYaw * cosPitch * dist;
 
-        const targetCamX = state.positionX + offsetX;
-        const targetCamZ = state.positionZ + offsetZ;
+        const targetCamX = targetX + offsetX;
+        const targetCamY = Math.max(0.4, targetY + offsetY);
+        const targetCamZ = targetZ + offsetZ;
 
-        camera.position.x = THREE.MathUtils.lerp(camera.position.x, targetCamX, 10 * delta);
-        camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetCamY, 10 * delta);
+        camera.position.x = THREE.MathUtils.lerp(camera.position.x, targetCamX, 12 * delta);
+        camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetCamY, 12 * delta);
         camera.position.z = THREE.MathUtils.lerp(camera.position.z, targetCamZ, 12 * delta);
 
-        const lookTargetX = state.positionX;
-        const lookTargetY = 1.0 + state.pitch * 0.4;
-        const lookTargetZ = state.positionZ + 4.0;
-        camera.lookAt(lookTargetX, lookTargetY, lookTargetZ);
+        // Character remains strictly centered in viewport frame
+        camera.lookAt(targetX, targetY, targetZ);
       } else {
-        camera.lookAt(state.positionX, 0.5, state.positionZ);
+        camera.lookAt(targetX, 0.5, targetZ);
       }
 
       // --- Update Terrain Environment ---
@@ -481,6 +492,7 @@ export const GameCanvas: React.FC = () => {
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
+      onWheel={onWheel}
       style={{ touchAction: 'none', cursor: 'grab' }}
     >
       <div ref={containerRef} className="three-canvas-container" />
