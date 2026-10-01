@@ -4,6 +4,7 @@ import { BIKES_DATABASE } from '../game/BikeConfigs';
 import { QUALITY_PRESETS, type GraphicsQuality } from '../game/GraphicsQuality';
 import type { PhysicsState } from '../game/PhysicsEngine';
 import type { WheelieHistoryRecord } from '../game/WheelieHistory';
+import { HELMETS_DATABASE } from '../game/Rider/HelmetConfig';
 
 interface HUDProps {
   physicsState: PhysicsState;
@@ -21,6 +22,12 @@ interface HUDProps {
   onRestart: () => void;
   wheelieHistory: WheelieHistoryRecord[];
   bestWheelie: number;
+  selectedHelmetId: string;
+  onHelmetChange: (id: string) => void;
+  helmetLoading: boolean;
+  helmetError: string;
+  riderDebug: boolean;
+  onRiderDebugChange: (enabled: boolean) => void;
 }
 
 const formatRecordTime = (timestamp: number) => {
@@ -34,6 +41,7 @@ export const HUD: React.FC<HUDProps> = ({
   physicsState, measuredPitchDeg, fps, engineRunning, enginePrompt, quality, onQualityChange, selectedBikeId, onBikeChange,
   isBikeLoading, loadProgress, bikeError, onRestart,
   wheelieHistory, bestWheelie,
+  selectedHelmetId, onHelmetChange, helmetLoading, helmetError, riderDebug, onRiderDebugChange,
 }) => {
   const [isMuted, setIsMuted] = useState(() => audioEngine.getMuted());
   const pitch = Math.min(90, Math.max(0, measuredPitchDeg));
@@ -77,6 +85,22 @@ export const HUD: React.FC<HUDProps> = ({
         {(isBikeLoading || bikeError) && <div className="hud-panel bike-notice" role="status">
           {isBikeLoading ? `Đang tải xe · ${Math.round(loadProgress)}%` : bikeError}
         </div>}
+      </div>
+      <div className="ride-rider-tools">
+        <label className="hud-panel menu-item helmet-item" title={helmetError || undefined}>
+          <span className="hud-caption">HELMET</span>
+          <select aria-label="Helmet" value={selectedHelmetId} onChange={e => onHelmetChange(e.target.value)}>
+            {HELMETS_DATABASE.length === 0 && <option value="">Chưa có nón</option>}
+            {HELMETS_DATABASE.map(helmet => <option key={helmet.id} value={helmet.id}>{helmet.name}</option>)}
+          </select>
+          {(helmetLoading || helmetError) && <span className="helmet-status" role="status">
+            {helmetError ? 'Lỗi tải nón' : 'Đang tải…'}
+          </span>}
+        </label>
+        {import.meta.env.DEV && <label className="hud-panel menu-item rider-debug-toggle">
+          <input type="checkbox" aria-label="Rider debug" checked={riderDebug} onChange={e => onRiderDebugChange(e.target.checked)} />
+          <span className="hud-caption">RIDER DEBUG</span>
+        </label>}
       </div>
       <section className="hud-panel ride-history" aria-label="Lịch sử bốc đầu">
         <div className="history-best">

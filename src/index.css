@@ -31,6 +31,12 @@ button, select { font: inherit; }
 .ride-hud select:disabled { opacity: .6; cursor: wait; }
 .engine-state { color: rgba(239, 239, 223, .5); font-size: 9px; letter-spacing: .35px; white-space: nowrap; }
 .engine-state.engine-on { color: #d9d58e; }
+.ride-rider-tools { position: absolute; top: 94px; left: max(16px, env(safe-area-inset-left)); width: 128px; display: flex; flex-direction: column; gap: 6px; pointer-events: auto; }
+.helmet-item { flex-direction: column; align-items: stretch; gap: 5px; }
+.helmet-item select { width: 100%; max-width: 100%; }
+.helmet-status { font-size: 10px; color: var(--hud-muted); }
+.rider-debug-toggle { cursor: pointer; }
+.rider-debug-toggle input { accent-color: #d9d58e; }
 .engine-prompt { position: absolute; top: 76px; left: 50%; transform: translateX(-50%); padding: 8px 13px; border: 1px solid rgba(231, 232, 205, .24); border-radius: 8px; background: rgba(22, 27, 16, .55); backdrop-filter: blur(6px); color: #efefdf; font-size: 12px; white-space: nowrap; animation: engine-prompt-in .18s ease-out; }
 .engine-prompt kbd { color: #e5d98b; font-weight: 700; }
 @keyframes engine-prompt-in { from { opacity: 0; transform: translate(-50%, -5px); } to { opacity: 1; transform: translate(-50%, 0); } }
@@ -74,6 +80,7 @@ button, select { font: inherit; }
   .ride-menu { flex-wrap: wrap; max-width: 440px; gap: 5px; }
   .menu-item { gap: 6px; padding: 5px 7px; min-height: 35px; }
   .ride-distance { min-width: 112px; padding: 10px; }
+  .ride-rider-tools { top: 83px; left: 10px; width: 112px; }
   .bike-notice { top: 84px; }
   .ride-history { top: 128px; right: 10px; width: 202px; height: 228px; }
   .ride-bottom-left { left: 10px; bottom: 10px; }
@@ -85,6 +92,9 @@ button, select { font: inherit; }
   .ride-menu .hud-caption { font-size: 9px; }
   .ride-distance { min-width: 96px; }
   .ride-distance .hud-caption { font-size: 9px; }
+  .ride-rider-tools { width: 96px; }
+  .rider-debug-toggle { gap: 4px; padding: 5px; }
+  .rider-debug-toggle .hud-caption { font-size: 8px; letter-spacing: 0; }
   .ride-bottom-left { max-width: calc(100% - 20px); }
   .ride-pitch { width: 230px; }
   .ride-help { max-width: calc(100vw - 115px); font-size: 10px; gap: 3px 9px; }

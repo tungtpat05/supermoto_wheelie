@@ -10,6 +10,8 @@ import { QUALITY_PRESETS, isGraphicsQuality, type GraphicsQuality } from '../gam
 import { DEFAULT_BIKE_ID, getBikeConfig } from '../game/BikeConfigs';
 import { loadBikeModel } from '../game/BikeLoader';
 import { WheelieHistoryTracker, type WheelieHistoryRecord } from '../game/WheelieHistory';
+import { DEFAULT_HELMET_ID } from '../game/Rider/HelmetConfig';
+import { RIDER_DEBUG_ENABLED } from '../game/Rider/RiderConfig';
 
 const QUALITY_KEY = 'supermoto_wheelie_quality';
 
@@ -24,7 +26,6 @@ export const GameCanvas: React.FC = () => {
   const environmentRef = useRef<EnvironmentManager | null>(null);
   const bikePartsRef = useRef<SupermotoParts | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
-  const initialRiderPosRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 0.88, -0.15));
 
   // Mouse Orbit Look Camera State
   const isDraggingRef = useRef<boolean>(false);
@@ -52,6 +53,10 @@ export const GameCanvas: React.FC = () => {
   const enginePromptTimerRef = useRef<number | null>(null);
   const [isBikeLoading, setIsBikeLoading] = useState<boolean>(true);
   const [loadProgress, setLoadProgress] = useState<number>(0);
+  const [selectedHelmetId, setSelectedHelmetId] = useState(DEFAULT_HELMET_ID);
+  const [helmetLoading, setHelmetLoading] = useState(false);
+  const [helmetError, setHelmetError] = useState('');
+  const [riderDebug, setRiderDebug] = useState(RIDER_DEBUG_ENABLED);
 
   // Keyboard Inputs State
   const inputsRef = useRef({
@@ -99,8 +104,6 @@ export const GameCanvas: React.FC = () => {
       bikePartsRef.current.wheelRotationEffect?.reset();
       bikePartsRef.current.bikeGroup.position.set(0, 0, 0);
       bikePartsRef.current.bodyGroup.rotation.set(0, 0, 0);
-      bikePartsRef.current.riderGroup.position.copy(initialRiderPosRef.current);
-      bikePartsRef.current.riderGroup.rotation.set(0, 0, 0);
     }
 
 
@@ -123,13 +126,11 @@ export const GameCanvas: React.FC = () => {
 
       if (!sceneRef.current) {
         newParts.wheelRotationEffect?.dispose();
+        newParts.rider.dispose();
         return;
       }
       bikePartsRef.current?.wheelRotationEffect?.dispose();
-
-      if (newParts.riderGroup) {
-        initialRiderPosRef.current.copy(newParts.riderGroup.position);
-      }
+      bikePartsRef.current?.rider.dispose();
 
       if (sceneRef.current) {
         if (bikePartsRef.current) {
@@ -154,6 +155,27 @@ export const GameCanvas: React.FC = () => {
       setIsBikeLoading(false);
     }
   }, []);
+
+  // Helmet selection is independent of bike selection; reattach it after any bike load.
+  useEffect(() => {
+    const rider = bikePartsRef.current?.rider;
+    if (!rider || isBikeLoading) return;
+    let cancelled = false;
+    setHelmetLoading(Boolean(selectedHelmetId));
+    setHelmetError('');
+    rider.setHelmet(selectedHelmetId).catch(error => {
+      if (cancelled) return;
+      console.warn('Helmet load failed:', error);
+      setHelmetError('Không tải được nón. Hãy chọn nón khác.');
+    }).finally(() => {
+      if (!cancelled) setHelmetLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [selectedHelmetId, isBikeLoading]);
+
+  useEffect(() => {
+    bikePartsRef.current?.rider.debug?.setEnabled(riderDebug);
+  }, [riderDebug, isBikeLoading]);
 
   // Keyboard Event Handlers
   useEffect(() => {
@@ -308,14 +330,13 @@ export const GameCanvas: React.FC = () => {
       .then((parts) => {
         if (disposed) {
           parts.wheelRotationEffect?.dispose();
+          parts.rider.dispose();
           return;
-        }
-        if (parts.riderGroup) {
-          initialRiderPosRef.current.copy(parts.riderGroup.position);
         }
         if (sceneRef.current) {
           if (bikePartsRef.current) {
             bikePartsRef.current.wheelRotationEffect?.dispose();
+            bikePartsRef.current.rider.dispose();
             sceneRef.current.remove(bikePartsRef.current.bikeGroup);
           }
           sceneRef.current.add(parts.bikeGroup);
@@ -326,9 +347,6 @@ export const GameCanvas: React.FC = () => {
         if (disposed) return;
         console.warn('Initial bike load fallback:', err);
         const fallback = createSupermotoBike();
-        if (fallback.riderGroup) {
-          initialRiderPosRef.current.copy(fallback.riderGroup.position);
-        }
         bikePartsRef.current = fallback;
         scene.add(fallback.bikeGroup);
         setBikeError('Không tải được mẫu xe. Đang dùng xe dự phòng.');
@@ -450,16 +468,10 @@ export const GameCanvas: React.FC = () => {
           currentBikeParts.frontWheel.rotation.x += wheelRotationSpeed;
           currentBikeParts.rearWheel.rotation.x += wheelRotationSpeed;
 
-          // Stickman rider leans slightly into handlebar
-          currentBikeParts.riderGroup.position.copy(initialRiderPosRef.current);
-          currentBikeParts.riderGroup.rotation.x = state.pitch * 0.35;
+          // Rider inherits bodyGroup's pose, so hands/feet remain on their anchors.
         } else {
           currentBikeParts.bikeGroup.position.set(state.positionX, rearHeight + rearWheelOffset, state.positionZ);
           currentBikeParts.bodyGroup.rotation.x = physics.bikeCrashRotation.x;
-          // Restore from initial position plus non-accumulating crash offset
-          currentBikeParts.riderGroup.position
-            .copy(initialRiderPosRef.current)
-            .add(physics.riderCrashOffset);
         }
       }
 
@@ -525,6 +537,7 @@ export const GameCanvas: React.FC = () => {
       }
       environment.dispose();
       bikePartsRef.current?.wheelRotationEffect?.dispose();
+      bikePartsRef.current?.rider.dispose();
       bikePartsRef.current = null;
       sceneRef.current = null;
       renderer.dispose();
@@ -561,6 +574,12 @@ export const GameCanvas: React.FC = () => {
         onRestart={handleRestart}
         wheelieHistory={wheelieHistory}
         bestWheelie={bestWheelie}
+        selectedHelmetId={selectedHelmetId}
+        onHelmetChange={setSelectedHelmetId}
+        helmetLoading={helmetLoading}
+        helmetError={helmetError}
+        riderDebug={riderDebug}
+        onRiderDebugChange={setRiderDebug}
       />
     </div>
   );

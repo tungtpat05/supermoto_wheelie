@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import { createStickmanRider } from './StickmanRider';
 import type { WheelRotationEffect } from './WheelRotationEffect';
+import { StickRider } from './Rider/StickRider';
+import { PROCEDURAL_RIDER_CONFIG } from './Rider/RiderConfig';
 
 export interface SupermotoParts {
   bikeGroup: THREE.Group;
@@ -12,6 +13,7 @@ export interface SupermotoParts {
   sparksEmitter: THREE.Group;
   exhaustEmitter: THREE.Group;
   wheelRotationEffect?: WheelRotationEffect;
+  rider: StickRider;
 }
 
 export function createSupermotoBike(): SupermotoParts {
@@ -237,8 +239,8 @@ export function createSupermotoBike(): SupermotoParts {
   bodyGroup.add(mufflerMesh);
 
   // --- 6. STICKMAN RIDER ---
-  const riderGroup = createStickmanRider(0xf97316);
-  riderGroup.position.set(0, 0.88, -0.2);
+  const rider = new StickRider(PROCEDURAL_RIDER_CONFIG, 0xf97316);
+  const riderGroup = rider.group;
   bodyGroup.add(riderGroup);
 
   // --- 7. SPARKS EMITTER GROUP ---
@@ -261,5 +263,6 @@ export function createSupermotoBike(): SupermotoParts {
     fenderTip,
     sparksEmitter,
     exhaustEmitter,
+    rider,
   };
 }

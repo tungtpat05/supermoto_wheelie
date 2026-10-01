@@ -2,19 +2,13 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { getBikeConfig } from './BikeConfigs';
 import { createSupermotoBike, type SupermotoParts } from './SupermotoMesh';
-import { createStickmanRider } from './StickmanRider';
 import { WheelRotationEffect } from './WheelRotationEffect';
+import { StickRider } from './Rider/StickRider';
+import { getRiderConfig } from './Rider/RiderConfig';
 
 // In-memory cache for raw loaded GLTF scenes to avoid re-fetching 26MB files
 const gltfSceneCache = new Map<string, THREE.Group>();
 const gltfLoader = new GLTFLoader();
-
-/**
- * Creates a stylized 3D stickman motocross rider matching the bike's color theme
- */
-export function createMotocrossRider(suitColor: string | number): THREE.Group {
-  return createStickmanRider(suitColor);
-}
 
 /**
  * Loads a bike model by its configuration and packages it into SupermotoParts
@@ -105,13 +99,9 @@ export async function loadBikeModel(
     ? new WheelRotationEffect(clonedModel, config.wheelVisualConfig)
     : undefined;
 
-  // Stylized rider mannequin positioned on seat
-  const riderGroup = createMotocrossRider(config.color);
-  riderGroup.position.set(
-    transform.riderOffset[0],
-    transform.riderOffset[1],
-    transform.riderOffset[2]
-  );
+  // All IK/contact anchors share bodyGroup's local space, including terrain tilt.
+  const rider = new StickRider(getRiderConfig(bikeId), config.color);
+  const riderGroup = rider.group;
   bodyGroup.add(riderGroup);
 
   // Fender Tip & Sparks emitter
@@ -150,5 +140,6 @@ export async function loadBikeModel(
     sparksEmitter,
     exhaustEmitter,
     wheelRotationEffect,
+    rider,
   };
 }
