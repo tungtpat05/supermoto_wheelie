@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="vi">
+<html lang="en">
 <meta charset="utf-8">
 <title>Crash restart verification</title>
 <style>
@@ -7,8 +7,8 @@ body{margin:0;background:#161910;color:#efefdf;font:13px Arial}
 nav{height:44px;display:flex;align-items:center;gap:12px;padding:0 12px;box-sizing:border-box}
 button{padding:5px 10px}iframe{display:block;border:0;width:100vw;height:calc(100vh - 44px)}
 </style>
-<nav><button id="verify">Kiểm tra tự restart</button><button id="crash">Ngã thử</button><output>Đang tải game</output></nav>
-<iframe src="/" title="Game kiểm tra"></iframe>
+<nav><button id="verify">Verify auto restart</button><button id="crash">Test crash</button><output>Loading game</output></nav>
+<iframe src="/" title="Test game"></iframe>
 <script type="module">
 // Development-only fixture: exercise the real game's keyboard controls and HUD.
 const frame = document.querySelector('iframe');
@@ -37,24 +37,24 @@ async function fall() {
 }
 crash.onclick = async () => {
   crash.disabled = true;
-  try { await fall(); output.textContent = 'Đếm ngược 3 → 2 → 1'; }
+  try { await fall(); output.textContent = 'Countdown 3 → 2 → 1'; }
   catch (error) { output.textContent = 'FAIL: ' + error.message; }
   finally { crash.disabled = false; }
 };
 verify.onclick = async () => {
   verify.disabled = crash.disabled = true;
   try {
-    output.textContent = 'Đang kiểm tra';
+    output.textContent = 'Verifying';
     await fall();
     const started = performance.now();
     const seen = new Set();
     while (countdown()) { seen.add(countdown()); await wait(25); }
     const elapsed = performance.now() - started;
-    assert([...seen].join(',') === '3,2,1', 'Phải hiển thị 3, 2, 1');
-    assert(elapsed >= 2850 && elapsed < 3500, 'Phải restart sau 3 giây');
-    assert(!doc().querySelector('[role="dialog"]'), 'Không được hiện popup');
-    assert(doc().querySelector('.ride-speed strong').textContent === '0', 'Vận tốc phải reset');
-    assert(doc().querySelector('.engine-state').textContent.includes('OFF'), 'Giữ cách restart hiện tại');
+    assert([...seen].join(',') === '3,2,1', 'Must display 3, 2, 1');
+    assert(elapsed >= 2850 && elapsed < 3500, 'Must restart after 3 seconds');
+    assert(!doc().querySelector('[role="dialog"]'), 'Must not show popup');
+    assert(doc().querySelector('.ride-speed strong').textContent === '0', 'Speed must reset');
+    assert(doc().querySelector('.engine-state').textContent.includes('OFF'), 'Keep current restart behavior');
     await fall();
     await wait(350);
     key('KeyR', 'keydown'); key('KeyR', 'keyup');
@@ -62,14 +62,14 @@ verify.onclick = async () => {
     // Start the engine again. A stale crash timer would incorrectly turn it OFF.
     key('ShiftLeft', 'keydown'); key('ShiftLeft', 'keyup');
     await wait(3100);
-    assert(doc().querySelector('.engine-state').textContent.includes('ON'), 'R phải hủy timer cũ');
+    assert(doc().querySelector('.engine-state').textContent.includes('ON'), 'R must cancel old timer');
     key('KeyR', 'keydown'); key('KeyR', 'keyup');
-    output.textContent = `PASS: 3 → 2 → 1, tự restart (${Math.round(elapsed)} ms), R hủy timer cũ`;
+    output.textContent = `PASS: 3 → 2 → 1, auto restart (${Math.round(elapsed)} ms), R cancelled old timer`;
   } catch (error) {
     key('KeyW', 'keyup');
     output.textContent = 'FAIL: ' + error.message;
   } finally { verify.disabled = crash.disabled = false; }
 };
-frame.onload = () => { output.textContent = 'Sẵn sàng'; };
+frame.onload = () => { output.textContent = 'Ready'; };
 </script>
 </html>

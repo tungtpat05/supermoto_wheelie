@@ -38,11 +38,10 @@ export class PhysicsEngine {
   public crashReason: string = '';
   public crashTime: number = 0;
   public bikeCrashRotation: THREE.Vector3 = new THREE.Vector3();
-  public riderCrashOffset: THREE.Vector3 = new THREE.Vector3();
 
   // Dynamic Physics Parameters (Tuned per selected bike)
   public maxSpeed: number = 25.5; // ~92 km/h (< 100 km/h)
-  public accelerationPower: number = 8.5; // m/s^2 (gia tốc vừa phải, chân thực)
+  public accelerationPower: number = 8.5; // m/s^2 (moderate, realistic acceleration)
   public brakePower: number = 22.0; // m/s^2
   public dragCoeff: number = 0.35;
 
@@ -92,7 +91,6 @@ export class PhysicsEngine {
     this.crashReason = '';
     this.crashTime = 0;
     this.bikeCrashRotation.set(0, 0, 0);
-    this.riderCrashOffset.set(0, 0, 0);
   }
 
   public setEngineRunning(running: boolean) {
@@ -121,8 +119,6 @@ export class PhysicsEngine {
       this.speed = Math.max(0, this.speed - 12 * delta);
       this.positionZ += this.speed * delta;
       this.bikeCrashRotation.x -= 6 * delta; // Overturning loop out
-      this.riderCrashOffset.y = Math.max(-0.6, this.riderCrashOffset.y - 2.5 * delta);
-      this.riderCrashOffset.z -= 3.5 * delta;
 
       return this.getState();
     }
@@ -164,22 +160,22 @@ export class PhysicsEngine {
     const wheelieSteerFactor = Math.max(0.2, 1.0 - (this.pitch / (Math.PI / 2)) * 0.8);
     this.steering = THREE.MathUtils.lerp(this.steering, steerInput * wheelieSteerFactor, 8 * delta);
     this.positionX += this.steering * (this.speed * 0.18) * delta;
-    // Map tự do thảo nguyên - không bị giới hạn 2 bên hẹp
+    // Open steppe terrain map - not constrained to narrow lanes
     this.positionX = THREE.MathUtils.clamp(this.positionX, -200, 200);
 
     // Roll tilt during steering (natural motorcycle lean into turn)
     const targetRoll = -this.steering * 0.28;
     this.roll = THREE.MathUtils.lerp(this.roll, targetRoll, 6 * delta);
 
-    // --- 3. Wheelie Pitch Physics (Cần gia tốc để duy trì góc, > 90° sẽ ngã) ---
+    // --- 3. Wheelie Pitch Physics (Requires acceleration to maintain pitch angle, > 90° loops out) ---
     let pitchTorque = 0;
 
     // A. Throttle Acceleration creates rotational pitch torque
     if (inputs.throttle) {
-      // Khi đạt tốc độ khoảng 20km/h là bánh xe bắt đầu nhấc khỏi mặt đất
+      // Once reaching ~20 km/h, the front wheel begins to lift off the ground
       const currentKmh = this.speed * 3.6;
-      // Dưới 14 km/h: bánh trước bám đường tăng tốc
-      // Đạt ~20 km/h: lực nâng vượt trọng lực (3.2), bánh trước bắt đầu nhấc bổng
+      // Below 14 km/h: front wheel grips the ground to accelerate
+      // At ~20 km/h: lift force exceeds gravity damping (3.2), front wheel starts lifting
       const liftRatio = THREE.MathUtils.clamp((currentKmh - 14) / 7.5, 0, 1.0);
       pitchTorque += this.throttlePitchTorque * (0.2 + 0.95 * liftRatio);
     }
@@ -192,17 +188,17 @@ export class PhysicsEngine {
 
     // D. Gravity Torque & Balance Equilibrium
     if (this.pitch < this.balanceAngle) {
-      // Dưới góc thăng bằng: Trọng lực kéo bánh trước rơi xuống đất nếu thiếu ga
+      // Below balance angle: Gravity pulls front wheel down without sufficient throttle
       const gravityPull = Math.cos(this.pitch) * this.gravityDamping;
       pitchTorque -= gravityPull;
     } else {
-      // TRÊN góc thăng bằng: Xe ngửa nhiều, trọng lực chuyển dần sang lôi xe ngửa tiếp
+      // ABOVE balance angle: Bike leans back far enough that gravity pulls it further back
       const overturnRatio = (this.pitch - this.balanceAngle) / (this.crashAngle - this.balanceAngle);
       const overturnForce = overturnRatio * 4.5;
       pitchTorque += overturnForce;
     }
 
-    // E. Fender Scrape Resistance (Fender quẹt đường hãm nhẹ khi chưa tới 90°)
+    // E. Fender Scrape Resistance (Fender scraping road adds slight braking torque before 90°)
     if (this.pitch >= this.scrapeAngle && this.pitch < this.crashAngle) {
       pitchTorque -= 3.5;
     }
@@ -212,16 +208,16 @@ export class PhysicsEngine {
     this.pitchVelocity *= Math.pow(0.08, delta); // Damping
     this.pitch += this.pitchVelocity * delta;
 
-    // Bánh trước chạm đất
+    // Front wheel touches down
     if (this.pitch < 0) {
       this.pitch = 0;
       this.pitchVelocity = 0;
     }
 
-    // --- 4. Crash Detection (> 90 độ sẽ lộn ngửa) ---
+    // --- 4. Crash Detection (> 90 degrees loops out) ---
     if (this.pitch >= this.crashAngle) {
       this.pitch = this.crashAngle;
-      this.triggerCrash('Lộn Ngửa Đằng Sau! (Góc bốc vượt quá 90°)');
+      this.triggerCrash('Looped Out Backwards! (Pitch angle exceeded 90°)');
     }
 
     this.wheelieDistance = this.pitch > 0 && !this.isCrashed

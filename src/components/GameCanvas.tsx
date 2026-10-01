@@ -148,7 +148,7 @@ export const GameCanvas: React.FC = () => {
 
     } catch (err) {
       console.error('Failed to switch bike:', err);
-      setBikeError('Không tải được xe. Vui lòng chọn lại.');
+      setBikeError('Failed to load bike. Please select another.');
     } finally {
       bikeLoadingRef.current = false;
       setIsBikeLoading(false);
@@ -165,7 +165,7 @@ export const GameCanvas: React.FC = () => {
     rider.setHelmet(selectedHelmetId).catch(error => {
       if (cancelled) return;
       console.warn('Helmet load failed:', error);
-      setHelmetError('Không tải được nón. Hãy chọn nón khác.');
+      setHelmetError('Failed to load helmet. Please choose another.');
     }).finally(() => {
       if (!cancelled) setHelmetLoading(false);
     });
@@ -348,7 +348,7 @@ export const GameCanvas: React.FC = () => {
         const fallback = createSupermotoBike();
         bikePartsRef.current = fallback;
         scene.add(fallback.bikeGroup);
-        setBikeError('Không tải được mẫu xe. Đang dùng xe dự phòng.');
+        setBikeError('Failed to load bike model. Using fallback bike.');
       })
       .finally(() => {
         if (disposed) return;

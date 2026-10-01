@@ -32,22 +32,6 @@ class AudioEngine {
     }
   }
 
-  public previewRev() {
-    this.init();
-    if (!this.ctx || this.isMuted) return;
-    const now = this.ctx.currentTime;
-    if (this.engineOsc && this.engineGain) {
-      const baseFreq = this.soundProfile === '2stroke_screamer' ? 72 : this.soundProfile === '2stroke_heavy' ? 58 : 45;
-      this.engineOsc.frequency.cancelScheduledValues(now);
-      this.engineOsc.frequency.setValueAtTime(baseFreq, now);
-      this.engineOsc.frequency.exponentialRampToValueAtTime(baseFreq * 3.5, now + 0.25);
-      this.engineOsc.frequency.exponentialRampToValueAtTime(baseFreq, now + 0.65);
-
-      this.engineGain.gain.setValueAtTime(0.35, now);
-      this.engineGain.gain.exponentialRampToValueAtTime(0.2, now + 0.7);
-    }
-  }
-
   public init() {
     if (this.isInitialized && this.ctx) {
       if (this.ctx.state === 'suspended') {
@@ -63,12 +47,15 @@ class AudioEngine {
       // Main Engine Sound setup (Sawtooth wave filtered to sound like a single-cylinder 450cc 4-stroke supermoto)
       this.engineOsc = this.ctx.createOscillator();
       this.engineOsc.type = 'sawtooth';
-      this.engineOsc.frequency.setValueAtTime(45, this.ctx.currentTime); // ~1500 RPM idle
+      let baseFreq = 45;
+      if (this.soundProfile === '2stroke_heavy') baseFreq = 58;
+      if (this.soundProfile === '2stroke_screamer') baseFreq = 72;
+      this.engineOsc.frequency.setValueAtTime(baseFreq, this.ctx.currentTime); // ~1500 RPM idle
 
       // Sub harmonic for thumping bass
       this.idleSubOsc = this.ctx.createOscillator();
       this.idleSubOsc.type = 'square';
-      this.idleSubOsc.frequency.setValueAtTime(22.5, this.ctx.currentTime);
+      this.idleSubOsc.frequency.setValueAtTime(baseFreq * 0.5, this.ctx.currentTime);
 
       this.engineFilter = this.ctx.createBiquadFilter();
       this.engineFilter.type = 'lowpass';
@@ -156,10 +143,6 @@ class AudioEngine {
     }
   }
 
-  public setBrakeVolume(_volume: number) {
-    // Hissing brake sound removed
-  }
-
   public playCrashSound() {
     if (!this.isInitialized || !this.ctx || this.isMuted) return;
 
@@ -203,10 +186,6 @@ class AudioEngine {
     const now = this.ctx.currentTime;
     this.engineGain.gain.cancelScheduledValues(now);
     this.engineGain.gain.setTargetAtTime(running && !this.isMuted ? 0.2 : 0, now, 0.035);
-  }
-
-  public isEngineRunning(): boolean {
-    return this.engineRunning;
   }
 
   public getMuted(): boolean {

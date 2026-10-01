@@ -55,7 +55,6 @@ button, select { font: inherit; }
 .ride-pitch { width: 274px; max-width: 100%; padding: 11px 13px 9px; }
 .pitch-heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
 .pitch-heading strong { font-weight: 500; font-size: 19px; font-variant-numeric: tabular-nums; }
-.pitch-en { opacity: .65; font-size: 9px; }
 .pitch-track { position: relative; height: 4px; margin-top: 12px; background: rgba(234, 236, 211, .17); border-radius: 3px; }
 .pitch-safe-zone { position: absolute; left: 50%; width: 33.33%; height: 100%; background: rgba(196, 204, 148, .6); }
 .pitch-needle { position: absolute; width: 3px; height: 10px; top: -3px; background: #f1efd6; border-radius: 2px; transform: translateX(-50%); }

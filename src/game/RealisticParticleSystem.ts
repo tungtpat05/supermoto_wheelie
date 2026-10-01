@@ -253,7 +253,7 @@ export class RealisticParticleSystem {
   }
 
   /**
-   * Spawns massive rooster tail dirt cloud and tire burnout smoke when launching (đề-pa)
+   * Spawns massive rooster tail dirt cloud and tire burnout smoke when launching (wheelspin launch)
    */
   public emitRidingDust(
     rearWheelWorldPos: THREE.Vector3,

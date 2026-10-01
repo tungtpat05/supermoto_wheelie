@@ -3,10 +3,10 @@ import type { WheelOverlayConfig, WheelVisualConfig } from './WheelVisualConfig'
 
 export const WHEEL_EFFECT_SETTINGS = {
   enabled: true,
-  minOpacity: 0.5, // Độ mờ rõ nét ngay khi vừa bắt đầu lăn bánh
-  maxOpacity: 0.98, // Độ mờ tối đa khi chạy nhanh
-  startBlurSpeed: 0.3, // m/s (~1 km/h) bắt đầu kích hoạt hiệu ứng
-  fullBlurSpeed: 12, // m/s (~43 km/h) đạt độ mờ tối đa
+  minOpacity: 0.5, // Crisp blur opacity right as wheels start rolling
+  maxOpacity: 0.98, // Maximum blur opacity at high speed
+  startBlurSpeed: 0.3, // m/s (~1 km/h) speed threshold to activate effect
+  fullBlurSpeed: 12, // m/s (~43 km/h) speed threshold for maximum opacity
   opacityResponse: 10, // exponential smoothing, independent of FPS
   rotationMultiplier: 1,
   frontCoastDeceleration: 5, // visual equivalent m/s² while airborne
