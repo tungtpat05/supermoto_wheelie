@@ -9,6 +9,7 @@ import { HUD } from './HUD';
 import { QUALITY_PRESETS, isGraphicsQuality, type GraphicsQuality } from '../game/GraphicsQuality';
 import { DEFAULT_BIKE_ID, getBikeConfig } from '../game/BikeConfigs';
 import { loadBikeModel } from '../game/BikeLoader';
+import { WheelieHistoryTracker, type WheelieHistoryRecord } from '../game/WheelieHistory';
 
 const QUALITY_KEY = 'supermoto_wheelie_quality';
 
@@ -19,6 +20,7 @@ export const GameCanvas: React.FC = () => {
 
   // Game Engine Objects
   const physicsRef = useRef<PhysicsEngine>(new PhysicsEngine());
+  const wheelieHistoryTrackerRef = useRef<WheelieHistoryTracker>(new WheelieHistoryTracker());
   const environmentRef = useRef<EnvironmentManager | null>(null);
   const bikePartsRef = useRef<SupermotoParts | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -61,6 +63,8 @@ export const GameCanvas: React.FC = () => {
 
   const [physicsState, setPhysicsState] = useState<PhysicsState>(() => new PhysicsEngine().getState());
   const [measuredPitchDeg, setMeasuredPitchDeg] = useState(0);
+  const [wheelieHistory, setWheelieHistory] = useState<WheelieHistoryRecord[]>([]);
+  const [bestWheelie, setBestWheelie] = useState(0);
 
   const changeQuality = useCallback((next: GraphicsQuality) => {
     qualityRef.current = next;
@@ -78,6 +82,7 @@ export const GameCanvas: React.FC = () => {
   // Restart Handler (Fixed: reset physics, environment terrain segments, rider and bike transforms)
   const handleRestart = useCallback(() => {
     physicsRef.current.reset();
+    wheelieHistoryTrackerRef.current.reset();
     environmentRef.current?.reset();
     orbitYawRef.current = 0;
     orbitPitchRef.current = 0.25;
@@ -369,6 +374,12 @@ export const GameCanvas: React.FC = () => {
       // Update Physics Engine
       const state = physics.update(delta, inputs);
 
+      const completedWheelieDistance = wheelieHistoryTrackerRef.current.update(state, engineRunningRef.current);
+      if (completedWheelieDistance !== null) {
+        setWheelieHistory(current => [{ timestamp: Date.now(), distance: completedWheelieDistance }, ...current]);
+        setBestWheelie(current => Math.max(current, completedWheelieDistance));
+      }
+
       // Throttle HUD state updates to ~20 FPS (every 0.05s)
       hudUpdateTimer += delta;
       if (hudUpdateTimer >= 0.05) {
@@ -533,6 +544,8 @@ export const GameCanvas: React.FC = () => {
         loadProgress={loadProgress}
         bikeError={bikeError}
         onRestart={handleRestart}
+        wheelieHistory={wheelieHistory}
+        bestWheelie={bestWheelie}
       />
     </div>
   );

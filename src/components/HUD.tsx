@@ -3,6 +3,7 @@ import { audioEngine } from '../audio/AudioEngine';
 import { BIKES_DATABASE } from '../game/BikeConfigs';
 import { QUALITY_PRESETS, type GraphicsQuality } from '../game/GraphicsQuality';
 import type { PhysicsState } from '../game/PhysicsEngine';
+import type { WheelieHistoryRecord } from '../game/WheelieHistory';
 
 interface HUDProps {
   physicsState: PhysicsState;
@@ -18,11 +19,21 @@ interface HUDProps {
   loadProgress: number;
   bikeError: string;
   onRestart: () => void;
+  wheelieHistory: WheelieHistoryRecord[];
+  bestWheelie: number;
 }
+
+const formatRecordTime = (timestamp: number) => {
+  const date = new Date(timestamp);
+  return [date.getHours(), date.getMinutes(), date.getSeconds()]
+    .map(value => value.toString().padStart(2, '0'))
+    .join(':');
+};
 
 export const HUD: React.FC<HUDProps> = ({
   physicsState, measuredPitchDeg, fps, engineRunning, enginePrompt, quality, onQualityChange, selectedBikeId, onBikeChange,
   isBikeLoading, loadProgress, bikeError, onRestart,
+  wheelieHistory, bestWheelie,
 }) => {
   const [isMuted, setIsMuted] = useState(() => audioEngine.getMuted());
   const pitch = Math.min(90, Math.max(0, measuredPitchDeg));
@@ -67,6 +78,22 @@ export const HUD: React.FC<HUDProps> = ({
           {isBikeLoading ? `Đang tải xe · ${Math.round(loadProgress)}%` : bikeError}
         </div>}
       </div>
+      <section className="hud-panel ride-history" aria-label="Lịch sử bốc đầu">
+        <div className="history-best">
+          <span className="hud-caption">BEST WHEELIE</span>
+          <strong>Best: {bestWheelie.toFixed(1)} <small>m</small></strong>
+        </div>
+        <div className="history-list" aria-live="polite">
+          {wheelieHistory.length === 0 ? (
+            <span className="history-empty">Chưa có lần bốc đầu</span>
+          ) : wheelieHistory.map((record, index) => (
+            <div className="history-record" key={`${record.timestamp}-${index}`}>
+              <time dateTime={new Date(record.timestamp).toISOString()}>{formatRecordTime(record.timestamp)}:</time>
+              <span>{record.distance.toFixed(1)} m</span>
+            </div>
+          ))}
+        </div>
+      </section>
       {enginePrompt && <div className="engine-prompt" role="status">Nhấn <kbd>Shift</kbd> để bật động cơ</div>}
 
       <div className="ride-bottom-left">
