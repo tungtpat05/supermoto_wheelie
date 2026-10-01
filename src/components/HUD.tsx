@@ -6,6 +6,7 @@ import type { PhysicsState } from '../game/PhysicsEngine';
 
 interface HUDProps {
   physicsState: PhysicsState;
+  measuredPitchDeg: number;
   fps: number;
   engineRunning: boolean;
   enginePrompt: boolean;
@@ -20,14 +21,14 @@ interface HUDProps {
 }
 
 export const HUD: React.FC<HUDProps> = ({
-  physicsState, fps, engineRunning, enginePrompt, quality, onQualityChange, selectedBikeId, onBikeChange,
+  physicsState, measuredPitchDeg, fps, engineRunning, enginePrompt, quality, onQualityChange, selectedBikeId, onBikeChange,
   isBikeLoading, loadProgress, bikeError, onRestart,
 }) => {
   const [isMuted, setIsMuted] = useState(() => audioEngine.getMuted());
-  const pitch = Math.min(90, Math.max(0, physicsState.pitchDeg));
+  const pitch = Math.min(90, Math.max(0, measuredPitchDeg));
   const status = physicsState.isCrashed ? 'Đã ngã xe'
-    : physicsState.isScrapingFender ? 'Quẹt đuôi · giảm góc bốc'
-    : physicsState.isSweetSpot ? 'Giữ thăng bằng'
+    : pitch >= 76 ? 'Quẹt đuôi · giảm góc bốc'
+    : pitch >= 45 && pitch <= 75 ? 'Giữ thăng bằng'
     : pitch > 0 ? 'Đang bốc đầu' : 'Bánh trước chạm đất';
 
   return (

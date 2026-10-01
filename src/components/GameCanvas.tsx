@@ -60,6 +60,7 @@ export const GameCanvas: React.FC = () => {
   });
 
   const [physicsState, setPhysicsState] = useState<PhysicsState>(() => new PhysicsEngine().getState());
+  const [measuredPitchDeg, setMeasuredPitchDeg] = useState(0);
 
   const changeQuality = useCallback((next: GraphicsQuality) => {
     qualityRef.current = next;
@@ -85,6 +86,7 @@ export const GameCanvas: React.FC = () => {
     engineRunningRef.current = false;
     setEngineRunning(false);
     setEnginePrompt(false);
+    setMeasuredPitchDeg(0);
     audioEngine.setEngineRunning(false);
     physicsRef.current.setEngineRunning(false);
 
@@ -398,6 +400,14 @@ export const GameCanvas: React.FC = () => {
       const frontHeight = terrainHeight(state.positionX, state.positionZ + 0.85);
       const terrainPitch = Math.atan2(frontHeight - rearHeight, 1.7);
       const groundHeight = rearHeight + 0.85 * Math.sin(terrainPitch);
+      // Measure the visible wheel-axle line after terrain tilt is applied.
+      // This keeps the HUD aligned with the actual bike orientation on slopes.
+      // Keep the grounded state at 0°, while including the terrain tilt once
+      // the front wheel is genuinely lifted and the visible axle line rotates.
+      const measuredPitchDeg = THREE.MathUtils.radToDeg(
+        state.pitch + (state.pitch > 0.05 ? terrainPitch : 0)
+      );
+      if (hudUpdateTimer === 0) setMeasuredPitchDeg(measuredPitchDeg);
       if (state.isCrashed && physics.crashTime < 0.1) {
         audioEngine.playCrashSound();
       }
@@ -511,6 +521,7 @@ export const GameCanvas: React.FC = () => {
       <div ref={containerRef} className="three-canvas-container" />
       <HUD
         physicsState={physicsState}
+        measuredPitchDeg={measuredPitchDeg}
         fps={fps}
         engineRunning={engineRunning}
         enginePrompt={enginePrompt}
