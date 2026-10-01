@@ -7,6 +7,8 @@ import type { PhysicsState } from '../game/PhysicsEngine';
 interface HUDProps {
   physicsState: PhysicsState;
   fps: number;
+  engineRunning: boolean;
+  enginePrompt: boolean;
   quality: GraphicsQuality;
   onQualityChange: (quality: GraphicsQuality) => void;
   selectedBikeId: string;
@@ -18,7 +20,7 @@ interface HUDProps {
 }
 
 export const HUD: React.FC<HUDProps> = ({
-  physicsState, fps, quality, onQualityChange, selectedBikeId, onBikeChange,
+  physicsState, fps, engineRunning, enginePrompt, quality, onQualityChange, selectedBikeId, onBikeChange,
   isBikeLoading, loadProgress, bikeError, onRestart,
 }) => {
   const [isMuted, setIsMuted] = useState(() => audioEngine.getMuted());
@@ -57,12 +59,14 @@ export const HUD: React.FC<HUDProps> = ({
               audioEngine.init();
               setIsMuted(audioEngine.toggleMute());
             }}>{isMuted ? 'Off' : 'On'}</button>
+            <span className={`engine-state ${engineRunning ? 'engine-on' : ''}`}>ENGINE {engineRunning ? 'ON' : 'OFF'}</span>
           </div>
         </nav>
         {(isBikeLoading || bikeError) && <div className="hud-panel bike-notice" role="status">
           {isBikeLoading ? `Đang tải xe · ${Math.round(loadProgress)}%` : bikeError}
         </div>}
       </div>
+      {enginePrompt && <div className="engine-prompt" role="status">Nhấn <kbd>Shift</kbd> để bật động cơ</div>}
 
       <div className="ride-bottom-left">
         <section className="hud-panel ride-pitch" aria-label="Góc bốc đầu">
@@ -78,7 +82,7 @@ export const HUD: React.FC<HUDProps> = ({
           <span><kbd>W / ↑</kbd> — Ga</span>
           <span><kbd>S / ↓</kbd> — Phanh</span>
           <span><kbd>A / D</kbd> — Lái</span>
-          <span><kbd>Space / Shift</kbd> — Bốc đầu</span>
+          <span><kbd>Shift</kbd> — Bật/tắt động cơ</span>
           <span><kbd>Kéo chuột</kbd> — Xoay</span>
           <span><kbd>Cuộn</kbd> — Zoom</span>
           <button type="button" onClick={onRestart} title="Thử lại (R)"><kbd>R</kbd> — Thử lại</button>

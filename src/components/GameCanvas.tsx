@@ -44,6 +44,10 @@ export const GameCanvas: React.FC = () => {
   const [fps, setFps] = useState(0);
   const [bikeError, setBikeError] = useState('');
   const bikeLoadingRef = useRef(true);
+  const [engineRunning, setEngineRunning] = useState(false);
+  const engineRunningRef = useRef(false);
+  const [enginePrompt, setEnginePrompt] = useState(false);
+  const enginePromptTimerRef = useRef<number | null>(null);
   const [isBikeLoading, setIsBikeLoading] = useState<boolean>(true);
   const [loadProgress, setLoadProgress] = useState<number>(0);
 
@@ -51,7 +55,6 @@ export const GameCanvas: React.FC = () => {
   const inputsRef = useRef({
     throttle: false,
     rearBrake: false,
-    leanBack: false,
     steerLeft: false,
     steerRight: false,
   });
@@ -79,6 +82,11 @@ export const GameCanvas: React.FC = () => {
     orbitPitchRef.current = 0.25;
     cameraDistanceRef.current = 4.8;
     isDraggingRef.current = false;
+    engineRunningRef.current = false;
+    setEngineRunning(false);
+    setEnginePrompt(false);
+    audioEngine.setEngineRunning(false);
+    physicsRef.current.setEngineRunning(false);
 
     if (bikePartsRef.current) {
       bikePartsRef.current.bikeGroup.position.set(0, 0, 0);
@@ -139,11 +147,29 @@ export const GameCanvas: React.FC = () => {
       audioEngine.init();
 
       if (e.target instanceof HTMLElement && e.target.closest('select, input, textarea')) return;
-      if (e.target instanceof HTMLElement && e.target.closest('button') && ['Space', 'Enter'].includes(e.code)) return;
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
+      if (e.target instanceof HTMLElement && e.target.closest('button') && e.code === 'Enter') return;
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+        if (e.repeat) return;
+        const nextRunning = !engineRunningRef.current;
+        engineRunningRef.current = nextRunning;
+        setEngineRunning(nextRunning);
+        setEnginePrompt(false);
+        if (enginePromptTimerRef.current !== null) window.clearTimeout(enginePromptTimerRef.current);
+        audioEngine.setEngineRunning(nextRunning);
+        physicsRef.current.setEngineRunning(nextRunning);
+        if (!nextRunning) environmentRef.current?.clearExhaust();
+        return;
+      }
+      const movementKey = ['KeyW', 'KeyS', 'KeyA', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code);
+      if (movementKey && !engineRunningRef.current) {
+        setEnginePrompt(true);
+        if (enginePromptTimerRef.current !== null) window.clearTimeout(enginePromptTimerRef.current);
+        enginePromptTimerRef.current = window.setTimeout(() => setEnginePrompt(false), 1800);
+        return;
+      }
       if (e.code === 'KeyW' || e.code === 'ArrowUp') inputsRef.current.throttle = true;
       if (e.code === 'KeyS' || e.code === 'ArrowDown') inputsRef.current.rearBrake = true;
-      if (e.code === 'Space' || e.shiftKey) inputsRef.current.leanBack = true;
       if (e.code === 'KeyA' || e.code === 'ArrowLeft') inputsRef.current.steerLeft = true;
       if (e.code === 'KeyD' || e.code === 'ArrowRight') inputsRef.current.steerRight = true;
 
@@ -155,19 +181,19 @@ export const GameCanvas: React.FC = () => {
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.code === 'KeyW' || e.code === 'ArrowUp') inputsRef.current.throttle = false;
       if (e.code === 'KeyS' || e.code === 'ArrowDown') inputsRef.current.rearBrake = false;
-      if (e.code === 'Space' || !e.shiftKey) inputsRef.current.leanBack = false;
       if (e.code === 'KeyA' || e.code === 'ArrowLeft') inputsRef.current.steerLeft = false;
       if (e.code === 'KeyD' || e.code === 'ArrowRight') inputsRef.current.steerRight = false;
     };
 
     const releaseInputs = () => {
-      inputsRef.current = { throttle: false, rearBrake: false, leanBack: false, steerLeft: false, steerRight: false };
+      inputsRef.current = { throttle: false, rearBrake: false, steerLeft: false, steerRight: false };
     };
     window.addEventListener('blur', releaseInputs);
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
 
     return () => {
+      if (enginePromptTimerRef.current !== null) window.clearTimeout(enginePromptTimerRef.current);
       window.removeEventListener('blur', releaseInputs);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
@@ -259,7 +285,9 @@ export const GameCanvas: React.FC = () => {
     const initialBikeId = selectedBikeIdRef.current;
     const initialConfig = getBikeConfig(initialBikeId);
     physicsRef.current.applyBikeTuning(initialConfig.physics);
+    physicsRef.current.setEngineRunning(false);
     audioEngine.setSoundProfile(initialConfig.soundType);
+    audioEngine.setEngineRunning(false);
 
     // Load initial bike model
     loadBikeModel(initialBikeId, progress => { if (!disposed) setLoadProgress(progress); })
@@ -347,7 +375,9 @@ export const GameCanvas: React.FC = () => {
       }
 
       // --- Update Audio ---
-      audioEngine.updateEngine(state.rpmRatio, inputs.throttle);
+      if (engineRunningRef.current) {
+        audioEngine.updateEngine(state.rpmRatio, inputs.throttle);
+      }
 
       const currentBikeParts = bikePartsRef.current;
 
@@ -405,7 +435,9 @@ export const GameCanvas: React.FC = () => {
         const config = getBikeConfig(selectedBikeIdRef.current);
         const exhaustPos = new THREE.Vector3();
         currentBikeParts.exhaustEmitter.getWorldPosition(exhaustPos);
-        environment.emitExhaust(exhaustPos, state.rpmRatio, inputs.throttle, config.engineCategory === '2-Stroke', delta);
+        if (engineRunningRef.current) {
+          environment.emitExhaust(exhaustPos, state.rpmRatio, inputs.throttle, config.engineCategory === '2-Stroke', delta);
+        }
         environment.emitRidingDust(new THREE.Vector3(state.positionX, rearHeight + 0.045, rearZ), state.speed, inputs.throttle, delta);
       }
       // --- Update Dynamic Camera with Mouse Orbit & Centered Target ---
@@ -480,6 +512,8 @@ export const GameCanvas: React.FC = () => {
       <HUD
         physicsState={physicsState}
         fps={fps}
+        engineRunning={engineRunning}
+        enginePrompt={enginePrompt}
         quality={quality}
         onQualityChange={changeQuality}
         selectedBikeId={selectedBikeId}

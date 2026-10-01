@@ -120,8 +120,8 @@ export async function loadBikeModel(
   bodyGroup.add(sparksEmitter);
 
   // Exhaust Tip & Exhaust smoke emitter
-  const exhaustPos = transform.exhaustTip || [0.18, 0.78, -0.95];
-  const exhaustTip = new THREE.Vector3(exhaustPos[0], exhaustPos[1], exhaustPos[2]);
+  // One neutral emitter for every model: centered under the rear of the tail.
+  const exhaustTip = new THREE.Vector3(0, 0.78, -0.98);
   const exhaustEmitter = new THREE.Group();
   exhaustEmitter.position.copy(exhaustTip);
   bodyGroup.add(exhaustEmitter);

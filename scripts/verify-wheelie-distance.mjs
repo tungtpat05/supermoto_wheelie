@@ -4,6 +4,14 @@ const controls = { throttle: false, rearBrake: false, leanBack: false, steerLeft
 for (const fps of [30, 60, 120]) {
   const bike = new PhysicsEngine();
   const step = (input = {}) => bike.update(1 / fps, { ...controls, ...input });
+  bike.setEngineRunning(false);
+  const engineOffStart = bike.getState();
+  for (let i = 0; i < fps; i++) step({ throttle: true, steerLeft: true, rearBrake: true });
+  const engineOffEnd = bike.getState();
+  assert.equal(engineOffEnd.speed, 0, 'Engine OFF must block throttle movement');
+  assert.equal(engineOffEnd.positionZ, engineOffStart.positionZ, 'Engine OFF must block forward movement');
+  assert.equal(engineOffEnd.positionX, engineOffStart.positionX, 'Engine OFF must block steering movement');
+  bike.setEngineRunning(true);
   bike.speed = 10;
   for (let i = 0; i < fps; i++) assert.equal(step().wheelieDistance, 0, 'Ground travel must not count');
   let state;

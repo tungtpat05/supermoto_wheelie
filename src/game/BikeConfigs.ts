@@ -11,16 +11,16 @@ export interface BikeConfig {
   engineCategory: '2-Stroke' | '4-Stroke'; color: string;
   soundType: '4stroke_deep' | '2stroke_heavy' | '2stroke_screamer';
   modelType: 'glb' | 'procedural'; modelUrl?: string;
-  modelTransform: { scale: number; rotationY: number; offsetY: number; fenderTip: [number, number, number]; riderOffset: [number, number, number]; exhaustTip: [number, number, number] };
+  modelTransform: { scale: number; rotationY: number; offsetY: number; fenderTip: [number, number, number]; riderOffset: [number, number, number] };
   physics: BikePhysicsTuning;
 }
 
 const tunedModels: Record<string, Partial<Pick<BikeConfig, 'color' | 'engineCategory' | 'soundType' | 'modelTransform' | 'physics'>>> = {
-  fantic_xxf_450: { color: '#ef4444', engineCategory: '4-Stroke', soundType: '4stroke_deep', modelTransform: { scale: 1, rotationY: Math.PI / 2, offsetY: .55, fenderTip: [0, .88, -1.08], riderOffset: [0, .88, -.15], exhaustTip: [.18, .78, -.95] } },
-  yamaha_yz125: { color: '#3b82f6', engineCategory: '2-Stroke', soundType: '2stroke_screamer', modelTransform: { scale: 1, rotationY: Math.PI / 2, offsetY: .56, fenderTip: [0, .88, -1.05], riderOffset: [0, .88, -.15], exhaustTip: [.18, .76, -.92] } },
+  fantic_xxf_450: { color: '#ef4444', engineCategory: '4-Stroke', soundType: '4stroke_deep', modelTransform: { scale: 1, rotationY: Math.PI / 2, offsetY: .55, fenderTip: [0, .88, -1.08], riderOffset: [0, .88, -.15] } },
+  yamaha_yz125: { color: '#3b82f6', engineCategory: '2-Stroke', soundType: '2stroke_screamer', modelTransform: { scale: 1, rotationY: Math.PI / 2, offsetY: .56, fenderTip: [0, .88, -1.05], riderOffset: [0, .88, -.15] } },
 };
 const defaultPhysics: BikePhysicsTuning = { maxSpeed: 25.5, accelerationPower: 8.5, brakePower: 22, throttlePitchTorque: 4, leanPitchTorque: 3, brakePitchTorque: 7.5, balanceAngle: .98, scrapeAngle: 1.36, crashAngle: Math.PI / 2 };
-const genericTransform: BikeConfig['modelTransform'] = { scale: 1, rotationY: Math.PI / 2, offsetY: .55, fenderTip: [0, .88, -1.08], riderOffset: [0, .88, -.15], exhaustTip: [.18, .78, -.95] };
+const genericTransform: BikeConfig['modelTransform'] = { scale: 1, rotationY: Math.PI / 2, offsetY: .55, fenderTip: [0, .88, -1.08], riderOffset: [0, .88, -.15] };
 
 function fileId(path: string): string { return path.split('/').pop()!.replace(/\.glb$/i, '').toLowerCase(); }
 function displayName(id: string): string {

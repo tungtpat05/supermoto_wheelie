@@ -245,7 +245,7 @@ export function createSupermotoBike(): SupermotoParts {
   bodyGroup.add(sparksEmitter);
 
   // --- 8. EXHAUST EMITTER GROUP ---
-  const exhaustTip = new THREE.Vector3(0.16, 0.84, -0.98);
+  const exhaustTip = new THREE.Vector3(0, 0.84, -0.98);
   const exhaustEmitter = new THREE.Group();
   exhaustEmitter.position.copy(exhaustTip);
   bodyGroup.add(exhaustEmitter);

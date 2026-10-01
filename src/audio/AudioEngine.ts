@@ -4,6 +4,7 @@ class AudioEngine {
   private ctx: AudioContext | null = null;
   private isMuted: boolean = false;
   private isInitialized: boolean = false;
+  private engineRunning: boolean = false;
 
   // Engine sound nodes
   private engineOsc: OscillatorNode | null = null;
@@ -75,7 +76,7 @@ class AudioEngine {
       this.engineFilter.Q.setValueAtTime(3, this.ctx.currentTime);
 
       this.engineGain = this.ctx.createGain();
-      this.engineGain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+      this.engineGain.gain.setValueAtTime(0, this.ctx.currentTime);
 
       const subGain = this.ctx.createGain();
       subGain.gain.setValueAtTime(0.15, this.ctx.currentTime);
@@ -127,7 +128,7 @@ class AudioEngine {
   }
 
   public updateEngine(rpmRatio: number, isAccelerating: boolean) {
-    if (!this.isInitialized || !this.ctx || this.isMuted) return;
+    if (!this.isInitialized || !this.ctx || this.isMuted || !this.engineRunning) return;
 
     const now = this.ctx.currentTime;
     const targetFreq = 45 + rpmRatio * 195;
@@ -189,11 +190,23 @@ class AudioEngine {
     this.isMuted = !this.isMuted;
     if (this.engineGain && this.ctx) {
       this.engineGain.gain.cancelScheduledValues(this.ctx.currentTime);
-      this.engineGain.gain.setValueAtTime(this.isMuted ? 0 : 0.2, this.ctx.currentTime);
+      this.engineGain.gain.setValueAtTime(!this.isMuted && this.engineRunning ? 0.2 : 0, this.ctx.currentTime);
       this.scrapeGain?.gain.cancelScheduledValues(this.ctx.currentTime);
       this.scrapeGain?.gain.setValueAtTime(0, this.ctx.currentTime);
     }
     return this.isMuted;
+  }
+
+  public setEngineRunning(running: boolean) {
+    this.engineRunning = running;
+    if (!this.ctx || !this.engineGain) return;
+    const now = this.ctx.currentTime;
+    this.engineGain.gain.cancelScheduledValues(now);
+    this.engineGain.gain.setTargetAtTime(running && !this.isMuted ? 0.2 : 0, now, 0.035);
+  }
+
+  public isEngineRunning(): boolean {
+    return this.engineRunning;
   }
 
   public getMuted(): boolean {

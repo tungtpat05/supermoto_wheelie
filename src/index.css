@@ -29,6 +29,11 @@ button, select { font: inherit; }
 .ride-hud select:hover, .ride-hud button:hover { background: rgba(229, 231, 207, 0.15); }
 .ride-hud select:focus-visible, .ride-hud button:focus-visible { outline: 1px solid #d5cc87; outline-offset: 2px; }
 .ride-hud select:disabled { opacity: .6; cursor: wait; }
+.engine-state { color: rgba(239, 239, 223, .5); font-size: 9px; letter-spacing: .35px; white-space: nowrap; }
+.engine-state.engine-on { color: #d9d58e; }
+.engine-prompt { position: absolute; top: 76px; left: 50%; transform: translateX(-50%); padding: 8px 13px; border: 1px solid rgba(231, 232, 205, .24); border-radius: 8px; background: rgba(22, 27, 16, .55); backdrop-filter: blur(6px); color: #efefdf; font-size: 12px; white-space: nowrap; animation: engine-prompt-in .18s ease-out; }
+.engine-prompt kbd { color: #e5d98b; font-weight: 700; }
+@keyframes engine-prompt-in { from { opacity: 0; transform: translate(-50%, -5px); } to { opacity: 1; transform: translate(-50%, 0); } }
 .bike-notice { position: absolute; right: 0; top: 48px; padding: 9px 12px; font-size: 11px; }
 .ride-bottom-left { position: absolute; left: max(16px, env(safe-area-inset-left)); bottom: max(16px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: flex-start; gap: 9px; max-width: calc(100% - 120px); }
 .ride-pitch { width: 274px; max-width: 100%; padding: 11px 13px 9px; }

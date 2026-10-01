@@ -358,6 +358,19 @@ export class RealisticParticleSystem {
     });
   }
 
+  public clearExhaust() {
+    this.exhaustTimer = 0;
+    this.exhaustPool.forEach((p, i) => {
+      p.active = false;
+      p.position.set(0, -999, 0);
+      this.exhaustSizes[i] = 0;
+      this.exhaustOpacities[i] = 0;
+    });
+    this.exhaustGeometry.attributes.position.needsUpdate = true;
+    this.exhaustGeometry.attributes.size.needsUpdate = true;
+    this.exhaustGeometry.attributes.particleOpacity.needsUpdate = true;
+  }
+
   /**
    * Updates all active particles and syncs geometry buffers
    */

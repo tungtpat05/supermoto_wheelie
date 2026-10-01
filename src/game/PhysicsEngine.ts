@@ -31,6 +31,7 @@ export class PhysicsEngine {
   public positionZ: number = 0;
   public positionX: number = 0;
   public wheelieDistance: number = 0;
+  private engineRunning = true;
 
   // Crash State
   public isCrashed: boolean = false;
@@ -94,12 +95,21 @@ export class PhysicsEngine {
     this.riderCrashOffset.set(0, 0, 0);
   }
 
+  public setEngineRunning(running: boolean) {
+    this.engineRunning = running;
+    if (!running) {
+      this.speed = 0;
+      this.pitch = 0;
+      this.pitchVelocity = 0;
+      this.wheelieDistance = 0;
+    }
+  }
+
   public update(
     delta: number,
     inputs: {
       throttle: boolean;
       rearBrake: boolean;
-      leanBack: boolean;
       steerLeft: boolean;
       steerRight: boolean;
     }
@@ -114,6 +124,16 @@ export class PhysicsEngine {
       this.riderCrashOffset.y = Math.max(-0.6, this.riderCrashOffset.y - 2.5 * delta);
       this.riderCrashOffset.z -= 3.5 * delta;
 
+      return this.getState();
+    }
+
+    if (!this.engineRunning) {
+      this.speed = 0;
+      this.pitch = 0;
+      this.pitchVelocity = 0;
+      this.wheelieDistance = 0;
+      this.steering = THREE.MathUtils.lerp(this.steering, 0, 8 * delta);
+      this.roll = THREE.MathUtils.lerp(this.roll, 0, 6 * delta);
       return this.getState();
     }
 
@@ -165,10 +185,6 @@ export class PhysicsEngine {
     }
 
     // B. Lean Back adds extra lifting torque
-    if (inputs.leanBack) {
-      pitchTorque += this.leanPitchTorque;
-    }
-
     // C. Rear Brake slams pitch down
     if (inputs.rearBrake && this.pitch > 0) {
       pitchTorque -= this.brakePitchTorque;

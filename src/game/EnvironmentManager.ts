@@ -192,6 +192,8 @@ export class EnvironmentManager {
     this.particleSystem.emitRidingDust(pos, speed, throttle, delta);
   }
 
+  public clearExhaust() { this.particleSystem.clearExhaust(); }
+
   public emitSparks(pos: THREE.Vector3, count = 4) { this.particleSystem.emitSparks(pos, count); }
 
   public setQuality(quality: GraphicsQuality) {
