@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { getSmokeTexture, getDustTexture, getSparkTexture } from './ParticleTextures';
+import { terrainHeight } from './SteppeTerrain';
 
 interface Particle {
   active: boolean;
@@ -29,6 +30,7 @@ export class RealisticParticleSystem {
   private exhaustColors: Float32Array;
   private exhaustSizes: Float32Array;
   private exhaustTimer: number = 0;
+  private exhaustOpacities = new Float32Array(this.maxExhaust);
 
   // Tire Dust & Burnout System
   private maxDust: number = 220;
@@ -38,6 +40,8 @@ export class RealisticParticleSystem {
   private dustPositions: Float32Array;
   private dustColors: Float32Array;
   private dustSizes: Float32Array;
+  private dustOpacities = new Float32Array(this.maxDust);
+  private dustTimer = 0;
 
   // Sparks System
   private maxSparks: number = 80;
@@ -60,6 +64,7 @@ export class RealisticParticleSystem {
     this.exhaustGeometry.setAttribute('position', new THREE.BufferAttribute(this.exhaustPositions, 3));
     this.exhaustGeometry.setAttribute('color', new THREE.BufferAttribute(this.exhaustColors, 3));
     this.exhaustGeometry.setAttribute('size', new THREE.BufferAttribute(this.exhaustSizes, 1));
+    this.exhaustGeometry.setAttribute('particleOpacity', new THREE.BufferAttribute(this.exhaustOpacities, 1));
 
     for (let i = 0; i < this.maxExhaust; i++) {
       this.exhaustPool.push({
@@ -88,6 +93,14 @@ export class RealisticParticleSystem {
       depthWrite: false,
       blending: THREE.NormalBlending,
     });
+    exhaustMaterial.onBeforeCompile = (shader) => {
+      shader.vertexShader = 'attribute float size;\nattribute float particleOpacity;\nvarying float vOpacity;\n' + shader.vertexShader;
+      // PointsMaterial already declares a uniform named size; use our per-particle attribute instead.
+      shader.vertexShader = shader.vertexShader.replace('uniform float size;', '');
+      shader.vertexShader = shader.vertexShader.replace('gl_PointSize = size;', 'gl_PointSize = size;\nvOpacity = particleOpacity;');
+      shader.fragmentShader = 'varying float vOpacity;\n' + shader.fragmentShader;
+      shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.a *= vOpacity;');
+    };
     this.exhaustPoints = new THREE.Points(this.exhaustGeometry, exhaustMaterial);
     this.exhaustPoints.frustumCulled = false;
     this.scene.add(this.exhaustPoints);
@@ -101,6 +114,7 @@ export class RealisticParticleSystem {
     this.dustGeometry.setAttribute('position', new THREE.BufferAttribute(this.dustPositions, 3));
     this.dustGeometry.setAttribute('color', new THREE.BufferAttribute(this.dustColors, 3));
     this.dustGeometry.setAttribute('size', new THREE.BufferAttribute(this.dustSizes, 1));
+    this.dustGeometry.setAttribute('particleOpacity', new THREE.BufferAttribute(this.dustOpacities, 1));
 
     for (let i = 0; i < this.maxDust; i++) {
       this.dustPool.push({
@@ -129,6 +143,14 @@ export class RealisticParticleSystem {
       depthWrite: false,
       blending: THREE.NormalBlending,
     });
+    dustMaterial.onBeforeCompile = (shader) => {
+      shader.vertexShader = 'attribute float size;\nattribute float particleOpacity;\nvarying float vOpacity;\n' + shader.vertexShader;
+      // PointsMaterial already declares a uniform named size; use our per-particle attribute instead.
+      shader.vertexShader = shader.vertexShader.replace('uniform float size;', '');
+      shader.vertexShader = shader.vertexShader.replace('gl_PointSize = size;', 'gl_PointSize = size;\nvOpacity = particleOpacity;');
+      shader.fragmentShader = 'varying float vOpacity;\n' + shader.fragmentShader;
+      shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.a *= vOpacity;');
+    };
     this.dustPoints = new THREE.Points(this.dustGeometry, dustMaterial);
     this.dustPoints.frustumCulled = false;
     this.scene.add(this.dustPoints);
@@ -233,12 +255,19 @@ export class RealisticParticleSystem {
   /**
    * Spawns massive rooster tail dirt cloud and tire burnout smoke when launching (đề-pa)
    */
-  public emitBurnout(
+  public emitRidingDust(
     rearWheelWorldPos: THREE.Vector3,
-    rpmRatio: number,
-    isLaunchBurnout: boolean
+    speed: number,
+    throttle: boolean,
+    delta: number
   ) {
-    const count = isLaunchBurnout ? 6 : 2;
+    if (speed < 0.25 && !throttle) { this.dustTimer = 0; return; }
+    const isLaunchBurnout = throttle && speed < 8;
+    const rpmRatio = Math.min(1, speed / 25);
+    const rate = isLaunchBurnout ? 95 : Math.min(65, 10 + speed * 2);
+    this.dustTimer += Math.min(delta, 0.1) * rate;
+    const count = Math.floor(this.dustTimer);
+    this.dustTimer -= count;
 
     for (let c = 0; c < count; c++) {
       let p = this.dustPool.find((item) => !item.active);
@@ -248,12 +277,12 @@ export class RealisticParticleSystem {
 
       p.active = true;
       p.life = 0;
-      p.maxLife = 0.8 + Math.random() * 0.6;
+      p.maxLife = 1.4 + Math.random() * 0.9;
 
       // Contact patch on the ground
       p.position.set(
         rearWheelWorldPos.x + (Math.random() - 0.5) * 0.4,
-        0.04 + Math.random() * 0.08,
+        rearWheelWorldPos.y + Math.random() * 0.08,
         rearWheelWorldPos.z + (Math.random() - 0.5) * 0.3
       );
 
@@ -269,13 +298,8 @@ export class RealisticParticleSystem {
       p.maxScale = isLaunchBurnout ? 2.4 : 1.2;
       p.scale = p.initialScale;
 
-      // Blend between rich golden savanna earth and white tire friction smoke
-      if (Math.random() > 0.4) {
-        p.color.setRGB(0.85, 0.73, 0.52); // Savanna golden soil
-      } else {
-        p.color.setRGB(0.92, 0.92, 0.94); // Rubber friction smoke
-      }
-      p.maxOpacity = isLaunchBurnout ? 0.75 : 0.45;
+      p.color.setHSL(0.095 + Math.random() * 0.02, 0.32, 0.52 + Math.random() * 0.16);
+      p.maxOpacity = isLaunchBurnout ? 0.58 : 0.32;
     }
   }
 
@@ -318,6 +342,8 @@ export class RealisticParticleSystem {
    * Resets all particles (used on restart)
    */
   public reset() {
+    this.dustTimer = 0;
+    this.exhaustTimer = 0;
     this.exhaustPool.forEach((p) => {
       p.active = false;
       p.position.set(0, -999, 0);
@@ -362,18 +388,21 @@ export class RealisticParticleSystem {
         this.exhaustPositions[idx + 2] = p.position.z;
 
         // Modulate color by opacity
-        this.exhaustColors[idx] = p.color.r * p.opacity;
-        this.exhaustColors[idx + 1] = p.color.g * p.opacity;
-        this.exhaustColors[idx + 2] = p.color.b * p.opacity;
+        this.exhaustColors[idx] = p.color.r;
+        this.exhaustColors[idx + 1] = p.color.g;
+        this.exhaustColors[idx + 2] = p.color.b;
+        this.exhaustOpacities[i] = p.active ? p.opacity : 0;
         this.exhaustSizes[i] = p.scale;
       } else {
         this.exhaustPositions[idx + 1] = -999;
         this.exhaustSizes[i] = 0;
+        this.exhaustOpacities[i] = 0;
       }
     }
     this.exhaustGeometry.attributes.position.needsUpdate = true;
     this.exhaustGeometry.attributes.color.needsUpdate = true;
     this.exhaustGeometry.attributes.size.needsUpdate = true;
+    this.exhaustGeometry.attributes.particleOpacity.needsUpdate = true;
 
     // 2. Update Dust & Burnout
     for (let i = 0; i < this.maxDust; i++) {
@@ -391,8 +420,9 @@ export class RealisticParticleSystem {
           p.position.addScaledVector(p.velocity, delta);
 
           // Floor collision clamp
-          if (p.position.y < 0.05) {
-            p.position.y = 0.05;
+          const floor = terrainHeight(p.position.x, p.position.z) + 0.05;
+          if (p.position.y < floor) {
+            p.position.y = floor;
             p.velocity.y *= -0.3;
           }
 
@@ -405,18 +435,21 @@ export class RealisticParticleSystem {
         this.dustPositions[idx + 1] = p.position.y;
         this.dustPositions[idx + 2] = p.position.z;
 
-        this.dustColors[idx] = p.color.r * p.opacity;
-        this.dustColors[idx + 1] = p.color.g * p.opacity;
-        this.dustColors[idx + 2] = p.color.b * p.opacity;
+        this.dustColors[idx] = p.color.r;
+        this.dustColors[idx + 1] = p.color.g;
+        this.dustColors[idx + 2] = p.color.b;
+        this.dustOpacities[i] = p.active ? p.opacity : 0;
         this.dustSizes[i] = p.scale;
       } else {
         this.dustPositions[idx + 1] = -999;
         this.dustSizes[i] = 0;
+        this.dustOpacities[i] = 0;
       }
     }
     this.dustGeometry.attributes.position.needsUpdate = true;
     this.dustGeometry.attributes.color.needsUpdate = true;
     this.dustGeometry.attributes.size.needsUpdate = true;
+    this.dustGeometry.attributes.particleOpacity.needsUpdate = true;
 
     // 3. Update Sparks
     for (let i = 0; i < this.maxSparks; i++) {
@@ -433,8 +466,9 @@ export class RealisticParticleSystem {
           p.position.addScaledVector(p.velocity, delta);
 
           // Bounce off ground
-          if (p.position.y < 0.02) {
-            p.position.y = 0.02;
+          const floor = terrainHeight(p.position.x, p.position.z) + 0.02;
+          if (p.position.y < floor) {
+            p.position.y = floor;
             p.velocity.y = Math.abs(p.velocity.y) * 0.45;
             p.velocity.multiplyScalar(0.7);
           }
@@ -459,5 +493,13 @@ export class RealisticParticleSystem {
     this.sparkGeometry.attributes.position.needsUpdate = true;
     this.sparkGeometry.attributes.color.needsUpdate = true;
     this.sparkGeometry.attributes.size.needsUpdate = true;
+  }
+
+  public dispose() {
+    for (const points of [this.exhaustPoints, this.dustPoints, this.sparkPoints]) {
+      this.scene.remove(points);
+      points.geometry.dispose();
+      (points.material as THREE.Material).dispose();
+    }
   }
 }

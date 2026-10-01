@@ -1,0 +1,9 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Steppe driving check</title>
+<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#111}iframe{display:block;width:100%;height:100%;border:0}nav{position:fixed;left:40%;bottom:18px;display:flex;gap:8px}button{padding:10px}</style>
+<iframe src="/" title="Game preview"></iframe><nav><button id="launch">Launch / coast</button><button id="reset">Reset</button></nav>
+<script type="module">
+const frame=document.querySelector('iframe');
+const key=(type,code)=>frame.contentWindow.dispatchEvent(new KeyboardEvent(type,{code,bubbles:true}));
+document.querySelector('#launch').onclick=()=>{key('keydown','KeyW');setTimeout(()=>key('keyup','KeyW'),1800);};
+document.querySelector('#reset').onclick=()=>{key('keyup','KeyW');key('keydown','KeyR');key('keyup','KeyR');};
+</script></html>

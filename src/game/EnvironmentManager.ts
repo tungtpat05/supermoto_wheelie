@@ -1,363 +1,233 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
-import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
+import { HDRLoader } from 'three/examples/jsm/loaders/HDRLoader.js';
 import { RealisticParticleSystem } from './RealisticParticleSystem';
+import { terrainHeight, terrainWear } from './SteppeTerrain';
+
+const LENGTH = 160;
+const COUNT = 12;
+const WIDTH = 2400;
+const GRASS_COUNT = 24000;
+interface TerrainTile {
+  ground: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>;
+  grass: THREE.InstancedMesh;
+  seed: number;
+}
 
 export class EnvironmentManager {
   private scene: THREE.Scene;
-  private groundSegments: THREE.Group[] = [];
-  private segmentLength: number = 70;
-  private totalSegments: number = 9;
-
-  // Realistic Particle System (Exhaust, Burnout Dust, Sparks)
+  private tiles: TerrainTile[] = [];
   private particleSystem: RealisticParticleSystem;
-
-  // Wind turbine rotating rotors
-  private rotatingRotors: THREE.Object3D[] = [];
+  private backdrop = new THREE.Group();
+  private sun = new THREE.DirectionalLight(0xffd296, 2.1);
+  private wind = { value: 0 };
+  private disposed = false;
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
     this.particleSystem = new RealisticParticleSystem(scene);
-
     this.setupSkyAndLighting();
-    this.createTerrainSegments();
-    this.loadEnvironmentGLBModels();
+    this.createTerrain();
   }
 
   private setupSkyAndLighting() {
-    // 1. Warm Savanna / Steppe Sky color fallback before HDR loads
-    this.scene.background = new THREE.Color(0x89bcee);
+    this.scene.fog = new THREE.FogExp2(0xdac8a4, 0.00105);
+    this.scene.add(new THREE.HemisphereLight(0xd6e3e4, 0x9c7846, 1.35));
+    this.sun.castShadow = true;
+    this.sun.shadow.mapSize.set(2048, 2048);
+    Object.assign(this.sun.shadow.camera, { near: 1, far: 240, left: -35, right: 35, top: 35, bottom: -35 });
+    this.sun.shadow.bias = -0.0003;
+    this.sun.shadow.normalBias = 0.035;
+    this.scene.add(this.sun, this.sun.target);
+    new HDRLoader().load('/environment/hdri/lebombo_1k.hdr', texture => {
+      if (this.disposed) { texture.dispose(); return; }
+      texture.mapping = THREE.EquirectangularReflectionMapping;
+      this.scene.environment = texture;
+      this.scene.environmentIntensity = 0.35;
+    });
 
-    // 2. Atmospheric Savanna Fog blending with the horizon
-    this.scene.fog = new THREE.FogExp2(0xe4d3b6, 0.0028);
+    const sky = new THREE.Mesh(new THREE.SphereGeometry(2000, 32, 20), new THREE.ShaderMaterial({
+      side: THREE.BackSide, depthWrite: false,
+      vertexShader: `varying vec3 vDirection;
+        void main() { vDirection = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }`,
+      fragmentShader: `varying vec3 vDirection;
+        void main() {
+          vec3 d = normalize(vDirection);
+          vec3 sky = mix(vec3(.65,.48,.29), vec3(.18,.38,.58), pow(max(d.y, 0.), .45));
+          float sun = max(dot(d, normalize(vec3(-.65,.22,.75))), 0.);
+          sky += vec3(.35,.21,.08) * pow(sun, 24.);
+          sky = mix(sky, vec3(1.,.91,.66), smoothstep(.99965,.99985,sun));
+          gl_FragColor = vec4(sky, 1.);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }`,
+    }));
+    this.backdrop.add(sky);
 
-    // 3. Directional Sun Light with Crisp Soft Contact Shadows
-    const sunLight = new THREE.DirectionalLight(0xfff6e4, 1.85);
-    sunLight.position.set(45, 80, -35);
-    sunLight.castShadow = true;
-    sunLight.shadow.mapSize.width = 2048;
-    sunLight.shadow.mapSize.height = 2048;
-    sunLight.shadow.camera.near = 1;
-    sunLight.shadow.camera.far = 300;
-    sunLight.shadow.camera.left = -60;
-    sunLight.shadow.camera.right = 60;
-    sunLight.shadow.camera.top = 60;
-    sunLight.shadow.camera.bottom = -60;
-    sunLight.shadow.bias = -0.0004;
-    this.scene.add(sunLight);
-
-    // Warm Ambient Light from the sky
-    const ambientLight = new THREE.AmbientLight(0xffedd5, 0.85);
-    this.scene.add(ambientLight);
-
-    // Sky Fill light from opposite side
-    const fillLight = new THREE.DirectionalLight(0xbadcff, 0.45);
-    fillLight.position.set(-40, 30, 35);
-    this.scene.add(fillLight);
-
-    // 4. Load HDRI 360 Environment Map (Lebombo Savanna)
-    const rgbeLoader = new RGBELoader();
-    rgbeLoader.load(
-      '/environment/hdri/lebombo_1k.hdr',
-      (texture) => {
-        texture.mapping = THREE.EquirectangularReflectionMapping;
-        this.scene.background = texture;
-        this.scene.environment = texture;
-      },
-      undefined,
-      (err) => {
-        console.warn('Failed to load Lebombo HDRI, attempting Kiara sunrise fallback:', err);
-        rgbeLoader.load('/environment/hdri/kiara_1_dawn_1k.hdr', (fallback) => {
-          fallback.mapping = THREE.EquirectangularReflectionMapping;
-          this.scene.background = fallback;
-          this.scene.environment = fallback;
-        });
+    // Two broad, irregular ridgelines keep the horizon distant without enclosing the rider.
+    for (let layer = 0; layer < 2; layer++) {
+      const geo = new THREE.PlaneGeometry(1, 1, 180, 10);
+      const p = geo.attributes.position;
+      for (let i = 0; i < p.count; i++) {
+        const u = (i % 181) / 180;
+        const v = Math.floor(i / 181) / 10;
+        const a = u * Math.PI * 2;
+        const r = 850 + layer * 350 + v * 280;
+        const peaks = 28 + 24 * Math.sin(a * 3 + layer) ** 2 + 48 * Math.sin(a * 5 - 1.2) ** 6;
+        p.setXYZ(i, Math.cos(a) * r, -14 + Math.sin(v * Math.PI) * peaks, Math.sin(a) * r);
       }
-    );
+      geo.computeVertexNormals();
+      const hills = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+        color: layer ? 0x8b9290 : 0x92917b, roughness: 1, side: THREE.DoubleSide,
+      }));
+      this.backdrop.add(hills);
+    }
+    this.scene.add(this.backdrop);
   }
 
-  private createTerrainSegments() {
-    const texLoader = new THREE.TextureLoader();
+  private createTerrain() {
+    const material = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1 });
+    material.onBeforeCompile = (shader) => {
+      shader.vertexShader = 'varying vec3 vEarth;\n' + shader.vertexShader;
+      shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>',
+        '#include <begin_vertex>\nvEarth = (modelMatrix * vec4(position, 1.)).xyz;');
+      shader.fragmentShader = `varying vec3 vEarth;
+        float hash(vec2 p) { return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+        float noise(vec2 p) {
+          vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
+          return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+1.),f.x),f.y);
+        }\n` + shader.fragmentShader;
+      shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `
+        #include <color_fragment>
+        vec2 p = vEarth.xz;
+        float track = p.x - sin(p.y*.008)*16. - sin(p.y*.023)*4.;
+        float ruts = exp(-pow((abs(track)-1.5)/.85,2.));
+        float clearing = max(0.,sin(p.x*.026+p.y*.016)*cos(p.y*.021-p.x*.013));
+        float wear = max(ruts*.94,max(exp(-pow(track/6.,2.))*.62,pow(clearing,3.)));
+        float patches = noise(p*.035)*.65 + noise(p*.19)*.35;
+        vec3 turf = mix(vec3(.23,.265,.105),vec3(.47,.405,.21),patches);
+        vec3 earth = mix(vec3(.39,.285,.155),vec3(.53,.405,.245),noise(p*.34));
+        float grain = .87 + .19*noise(p*8.) + .06*noise(p*29.);
+        diffuseColor.rgb *= mix(turf,earth,smoothstep(.12,.88,wear))*grain;
+      `);
+    };
 
-    // PBR Grass Textures
-    const grassColor = texLoader.load('/environment/textures/grass_color.jpg');
-    grassColor.wrapS = THREE.RepeatWrapping;
-    grassColor.wrapT = THREE.RepeatWrapping;
-    grassColor.repeat.set(30, 6);
-
-    const grassNormal = texLoader.load('/environment/textures/grass_normal.jpg');
-    grassNormal.wrapS = THREE.RepeatWrapping;
-    grassNormal.wrapT = THREE.RepeatWrapping;
-    grassNormal.repeat.set(30, 6);
-
-    const grassRoughness = texLoader.load('/environment/textures/grass_roughness.jpg');
-    grassRoughness.wrapS = THREE.RepeatWrapping;
-    grassRoughness.wrapT = THREE.RepeatWrapping;
-    grassRoughness.repeat.set(30, 6);
-
-    const grassMat = new THREE.MeshStandardMaterial({
-      map: grassColor,
-      normalMap: grassNormal,
-      roughnessMap: grassRoughness,
-      color: 0xd6c478, // Warm Golden Savanna Grass tint
-      roughness: 0.88,
-      metalness: 0.02,
-    });
-
-    // PBR Dirt / Riding Trail Textures
-    const rockColor = texLoader.load('/environment/textures/rock_color.jpg');
-    rockColor.wrapS = THREE.RepeatWrapping;
-    rockColor.wrapT = THREE.RepeatWrapping;
-    rockColor.repeat.set(3.5, 7);
-
-    const rockNormal = texLoader.load('/environment/textures/rock_normal.jpg');
-    rockNormal.wrapS = THREE.RepeatWrapping;
-    rockNormal.wrapT = THREE.RepeatWrapping;
-    rockNormal.repeat.set(3.5, 7);
-
-    const trailMat = new THREE.MeshStandardMaterial({
-      map: rockColor,
-      normalMap: rockNormal,
-      color: 0xc8b282, // Natural compacted dry dirt & sandstone trail
-      roughness: 0.94,
-      metalness: 0.01,
-    });
-
-    for (let i = 0; i < this.totalSegments; i++) {
-      const segment = new THREE.Group();
-      const zPos = i * this.segmentLength - 35;
-
-      // 1. Vast Open Savanna Plane (Rộng 400m - Hoàn toàn thoáng đãng)
-      const grassGeo = new THREE.PlaneGeometry(400, this.segmentLength);
-      const grassMesh = new THREE.Mesh(grassGeo, grassMat);
-      grassMesh.rotation.x = -Math.PI / 2;
-      grassMesh.receiveShadow = true;
-      segment.add(grassMesh);
-
-      // 2. Natural Compacted Dirt Riding Corridor (Rộng 35m)
-      const trailGeo = new THREE.PlaneGeometry(35, this.segmentLength);
-      const trailMesh = new THREE.Mesh(trailGeo, trailMat);
-      trailMesh.rotation.x = -Math.PI / 2;
-      trailMesh.position.y = 0.006;
-      trailMesh.receiveShadow = true;
-      segment.add(trailMesh);
-
-      segment.position.set(0, 0, zPos);
-      this.scene.add(segment);
-      this.groundSegments.push(segment);
+    // Each tuft has three tapered, slightly bent blades. Instances keep draw calls low.
+    const blade = new THREE.BufferGeometry();
+    const vertices: number[] = [];
+    for (let i = 0; i < 5; i++) {
+      const a = i * Math.PI / 2.5;
+      const x = Math.cos(a) * .022, z = Math.sin(a) * .022;
+      vertices.push(-x, 0, -z, x, 0, z, Math.cos(a) * .06, .7 + i * .07, Math.sin(a) * .06);
+    }
+    blade.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    blade.computeVertexNormals();
+    const grassMat = new THREE.MeshStandardMaterial({ roughness: 1, side: THREE.DoubleSide });
+    grassMat.onBeforeCompile = (shader) => {
+      shader.uniforms.steppeTime = this.wind;
+      shader.vertexShader = 'uniform float steppeTime;\nvarying float vBladeHeight;\n' + shader.vertexShader;
+      shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `
+        #include <begin_vertex>
+        vBladeHeight = position.y;
+        transformed.x += sin(steppeTime*1.6 + instanceMatrix[3].x*.3 + instanceMatrix[3].z*.17)*.10*position.y*position.y;
+      `);
+      shader.fragmentShader = 'varying float vBladeHeight;\n' + shader.fragmentShader;
+      shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>',
+        '#include <color_fragment>\ndiffuseColor.rgb *= mix(vec3(.58,.60,.40),vec3(1.12,1.05,.79),vBladeHeight);');
+    };
+    for (let i = 0; i < COUNT; i++) {
+      const geo = new THREE.PlaneGeometry(WIDTH, LENGTH, 400, 40);
+      geo.rotateX(-Math.PI / 2);
+      const ground = new THREE.Mesh(geo, material);
+      ground.receiveShadow = true;
+      const grass = new THREE.InstancedMesh(blade, grassMat, GRASS_COUNT);
+      grass.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      const tile = { ground, grass, seed: 1234 + i * 97 };
+      this.tiles.push(tile);
+      this.placeTile(tile, (i - 3) * LENGTH);
+      this.scene.add(ground, grass);
     }
   }
 
-  /**
-   * Loads high-quality GLB/GLTF models (Trees, Rocks, Cactus, Wind Turbines)
-   * and populates the infinite terrain segments
-   */
-  private async loadEnvironmentGLBModels() {
-    const dracoLoader = new DRACOLoader();
-    dracoLoader.setDecoderPath('/draco/');
-
-    const gltfLoader = new GLTFLoader();
-    gltfLoader.setDRACOLoader(dracoLoader);
-
-    const modelUrls = [
-      { id: 'treeBig', url: '/environment/models/tree-big.gltf', type: 'tree', scale: 7.5 },
-      { id: 'treeSmall', url: '/environment/models/tree-small.gltf', type: 'tree', scale: 6.5 },
-      { id: 'treeLowPoly', url: '/environment/models/low-poly-tree.gltf', type: 'tree', scale: 5.5 },
-      { id: 'rock', url: '/environment/models/formation-rock.gltf', type: 'rock', scale: 3.2 },
-      { id: 'rockLarge', url: '/environment/models/formation-large-rock.gltf', type: 'rock', scale: 3.8 },
-      { id: 'cactus', url: '/environment/models/cactus.gltf', type: 'cactus', scale: 3.0 },
-      { id: 'turbine', url: '/environment/models/wind-turbine.gltf', type: 'turbine', scale: 12.0 },
-    ];
-
-    const loadedScenes: { id: string; scene: THREE.Group; type: string; scale: number }[] = [];
-
-    for (const item of modelUrls) {
-      try {
-        const gltf = await new Promise<any>((resolve, reject) => {
-          gltfLoader.load(item.url, resolve, undefined, reject);
-        });
-
-        const root = gltf.scene as THREE.Group;
-        root.traverse((child) => {
-          if ((child as THREE.Mesh).isMesh) {
-            const mesh = child as THREE.Mesh;
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-
-            if (mesh.material) {
-              const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-              mats.forEach((m) => {
-                if (m instanceof THREE.MeshStandardMaterial) {
-                  m.roughness = Math.max(0.3, m.roughness);
-                  m.envMapIntensity = 1.0;
-                }
-              });
-            }
-          }
-        });
-
-        loadedScenes.push({
-          id: item.id,
-          scene: root,
-          type: item.type,
-          scale: item.scale,
-        });
-      } catch (err) {
-        console.warn(`Could not load environment model ${item.id}:`, err);
-      }
+  private placeTile(tile: TerrainTile, centerZ: number) {
+    tile.ground.position.z = centerZ;
+    tile.grass.position.z = centerZ;
+    const p = tile.ground.geometry.attributes.position;
+    for (let i = 0; i < p.count; i++) p.setY(i, terrainHeight(p.getX(i), p.getZ(i) + centerZ));
+    p.needsUpdate = true;
+    tile.ground.geometry.computeVertexNormals();
+    tile.ground.geometry.computeBoundingSphere();
+    let seed = tile.seed;
+    const random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+    const dummy = new THREE.Object3D();
+    const color = new THREE.Color();
+    let count = 0;
+    for (let i = 0; i < GRASS_COUNT; i++) {
+      const x = (random() - .5) * 640, z = (random() - .5) * LENGTH;
+      const wear = terrainWear(x, z + centerZ);
+      if (random() < wear * .97) continue;
+      dummy.position.set(x, terrainHeight(x, z + centerZ) - .025, z);
+      dummy.rotation.y = random() * Math.PI * 2;
+      const height = .14 + random() * .23;
+      dummy.scale.set(.8 + random() * .7, height, .8 + random() * .7);
+      dummy.updateMatrix();
+      tile.grass.setMatrixAt(count, dummy.matrix);
+      color.setHSL(.13 + random() * .095, .27 + random() * .16, .26 + random() * .17);
+      tile.grass.setColorAt(count++, color);
     }
-
-    if (loadedScenes.length === 0) return;
-
-    // Distribute models across the 9 segments
-    const trees = loadedScenes.filter((m) => m.type === 'tree');
-    const rocks = loadedScenes.filter((m) => m.type === 'rock');
-    const cacti = loadedScenes.filter((m) => m.type === 'cactus');
-    const turbines = loadedScenes.filter((m) => m.type === 'turbine');
-
-    this.groundSegments.forEach((segment, segIdx) => {
-      // 1. Place 3D Trees (2 to 4 trees per segment, far enough from center track |X| > 22)
-      for (let t = 0; t < 3; t++) {
-        if (trees.length === 0) break;
-        const treeTemplate = trees[(segIdx + t) % trees.length];
-        const treeClone = treeTemplate.scene.clone(true);
-
-        const side = t % 2 === 0 ? 1 : -1;
-        const xPos = side * (24 + Math.random() * 85);
-        const zPos = (Math.random() - 0.5) * this.segmentLength;
-        const scale = treeTemplate.scale * (0.8 + Math.random() * 0.45);
-
-        treeClone.position.set(xPos, 0, zPos);
-        treeClone.rotation.y = Math.random() * Math.PI * 2;
-        treeClone.scale.setScalar(scale);
-        segment.add(treeClone);
-      }
-
-      // 2. Place 3D Weathered Rocks & Sandstone Boulders
-      for (let r = 0; r < 2; r++) {
-        if (rocks.length === 0) break;
-        const rockTemplate = rocks[(segIdx * 2 + r) % rocks.length];
-        const rockClone = rockTemplate.scene.clone(true);
-
-        const side = Math.random() > 0.5 ? 1 : -1;
-        const xPos = side * (19 + Math.random() * 60);
-        const zPos = (Math.random() - 0.5) * this.segmentLength;
-        const scale = rockTemplate.scale * (0.75 + Math.random() * 0.6);
-
-        rockClone.position.set(xPos, 0, zPos);
-        rockClone.rotation.set(0, Math.random() * Math.PI * 2, 0);
-        rockClone.scale.setScalar(scale);
-        segment.add(rockClone);
-      }
-
-      // 3. Place Desert Cacti (Savanna Vegetation)
-      if (cacti.length > 0 && segIdx % 2 === 0) {
-        const cactusTemplate = cacti[0];
-        const cactusClone = cactusTemplate.scene.clone(true);
-
-        const side = Math.random() > 0.5 ? 1 : -1;
-        const xPos = side * (20 + Math.random() * 45);
-        const zPos = (Math.random() - 0.5) * this.segmentLength;
-
-        cactusClone.position.set(xPos, 0, zPos);
-        cactusClone.rotation.y = Math.random() * Math.PI * 2;
-        cactusClone.scale.setScalar(cactusTemplate.scale * (0.8 + Math.random() * 0.5));
-        segment.add(cactusClone);
-      }
-
-      // 4. Distant Giant Wind Turbines on the Horizon (Every 3rd segment)
-      if (turbines.length > 0 && segIdx % 3 === 0) {
-        const turbineTemplate = turbines[0];
-        const turbineClone = turbineTemplate.scene.clone(true);
-
-        const side = segIdx % 6 === 0 ? 1 : -1;
-        const xPos = side * (110 + Math.random() * 40);
-        const zPos = (Math.random() - 0.5) * this.segmentLength;
-
-        turbineClone.position.set(xPos, 0, zPos);
-        turbineClone.rotation.y = side > 0 ? -Math.PI / 4 : Math.PI / 4;
-        turbineClone.scale.setScalar(turbineTemplate.scale * 1.3);
-
-        // Find rotor blades to animate spin
-        turbineClone.traverse((child) => {
-          if (child.name.toLowerCase().includes('blade') || child.name.toLowerCase().includes('rotor') || child.children.length >= 3) {
-            this.rotatingRotors.push(child);
-          }
-        });
-
-        segment.add(turbineClone);
-      }
-    });
+    tile.grass.count = count;
+    tile.grass.instanceMatrix.needsUpdate = true;
+    if (tile.grass.instanceColor) tile.grass.instanceColor.needsUpdate = true;
+    tile.grass.computeBoundingSphere();
   }
 
-  // --- Public Particle Effects API ---
-
-  /**
-   * Emits realistic exhaust smoke puffs out the exhaust pipe
-   */
-  public emitExhaust(
-    exhaustTipWorldPos: THREE.Vector3,
-    rpmRatio: number,
-    throttle: boolean,
-    isTwoStroke: boolean,
-    delta: number
-  ) {
-    this.particleSystem.emitExhaust(exhaustTipWorldPos, rpmRatio, throttle, isTwoStroke, delta);
+  public emitExhaust(pos: THREE.Vector3, rpm: number, throttle: boolean, twoStroke: boolean, delta: number) {
+    this.particleSystem.emitExhaust(pos, rpm, throttle, twoStroke, delta);
   }
 
-  /**
-   * Emits tire burnout smoke & violent rooster-tail dirt plume when launching / accelerating (đề-pa)
-   */
-  public emitBurnout(rearWheelPos: THREE.Vector3, rpmRatio: number, isLaunchBurnout: boolean) {
-    this.particleSystem.emitBurnout(rearWheelPos, rpmRatio, isLaunchBurnout);
+  public emitRidingDust(pos: THREE.Vector3, speed: number, throttle: boolean, delta: number) {
+    this.particleSystem.emitRidingDust(pos, speed, throttle, delta);
   }
 
-  /**
-   * Compatibility wrapper for riding dirt trail
-   */
-  public emitDust(worldPos: THREE.Vector3, count: number = 4) {
-    this.particleSystem.emitBurnout(worldPos, 0.4, count > 3);
-  }
+  public emitSparks(pos: THREE.Vector3, count = 4) { this.particleSystem.emitSparks(pos, count); }
 
-  /**
-   * Emits glowing sparks when the rear fender scrapes the ground
-   */
-  public emitSparks(worldPos: THREE.Vector3, count: number = 4) {
-    this.particleSystem.emitSparks(worldPos, count);
-  }
-
-  /**
-   * Resets all ground segments and particle pools back to origin
-   */
   public reset() {
-    for (let i = 0; i < this.totalSegments; i++) {
-      const segment = this.groundSegments[i];
-      const zPos = i * this.segmentLength - 35;
-      segment.position.set(0, 0, zPos);
-    }
+    this.tiles.forEach((tile, i) => this.placeTile(tile, (i - 3) * LENGTH));
     this.particleSystem.reset();
+    this.update(0, 0, 0);
   }
 
-  /**
-   * Game loop update: infinite scrolling terrain, wind turbine animation, and particle physics
-   */
-  public update(playerZ: number, delta: number) {
-    // 1. Infinite scrolling terrain relative to playerZ
-    for (const segment of this.groundSegments) {
-      if (segment.position.z < playerZ - this.segmentLength * 1.5) {
-        segment.position.z += this.totalSegments * this.segmentLength;
-      } else if (segment.position.z > playerZ + this.segmentLength * (this.totalSegments - 0.5)) {
-        segment.position.z -= this.totalSegments * this.segmentLength;
-      }
+  public update(playerZ: number, delta: number, playerX = 0) {
+    for (const tile of this.tiles) {
+      let z = tile.ground.position.z;
+      while (z < playerZ - 3.5 * LENGTH) z += COUNT * LENGTH;
+      while (z > playerZ + 8.5 * LENGTH) z -= COUNT * LENGTH;
+      if (z !== tile.ground.position.z) this.placeTile(tile, z);
     }
-
-    // 2. Animate distant wind turbine rotor rotation
-    for (const rotor of this.rotatingRotors) {
-      rotor.rotation.z += 1.35 * delta;
-    }
-
-    // 3. Update particle physics & sync buffers
+    this.backdrop.position.set(playerX * .7, 0, playerZ);
+    this.sun.position.set(playerX - 65, 45, playerZ + 75);
+    this.sun.target.position.set(playerX, 0, playerZ);
+    this.wind.value += delta;
     this.particleSystem.update(delta);
+  }
+
+  public dispose() {
+    this.disposed = true;
+    this.scene.environment?.dispose();
+    const geometries = new Set<THREE.BufferGeometry>();
+    const materials = new Set<THREE.Material>();
+    for (const object of [...this.tiles.flatMap(t => [t.ground, t.grass]), this.backdrop]) {
+      object.traverse(child => {
+        if (child instanceof THREE.Mesh) {
+          geometries.add(child.geometry);
+          (Array.isArray(child.material) ? child.material : [child.material]).forEach(m => materials.add(m));
+          if (child instanceof THREE.InstancedMesh) child.dispose();
+        }
+      });
+      this.scene.remove(object);
+    }
+    geometries.forEach(g => g.dispose());
+    materials.forEach(m => m.dispose());
+    this.sun.dispose();
+    this.particleSystem.dispose();
   }
 }

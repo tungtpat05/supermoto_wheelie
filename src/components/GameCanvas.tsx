@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import { createSupermotoBike, type SupermotoParts } from '../game/SupermotoMesh';
 import { EnvironmentManager } from '../game/EnvironmentManager';
+import { terrainHeight } from '../game/SteppeTerrain';
 import { PhysicsEngine, type PhysicsState } from '../game/PhysicsEngine';
 import { audioEngine } from '../audio/AudioEngine';
 import { HUD } from './HUD';
@@ -242,7 +243,7 @@ export const GameCanvas: React.FC = () => {
     sceneRef.current = scene;
 
     // Camera (Default rear chase view looking forward in +Z)
-    const camera = new THREE.PerspectiveCamera(60, aspect, 0.1, 500);
+    const camera = new THREE.PerspectiveCamera(60, aspect, 0.1, 2400);
     camera.position.set(0, 2.2, -4.8);
     camera.lookAt(0, 1.0, 4.0);
 
@@ -251,9 +252,9 @@ export const GameCanvas: React.FC = () => {
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.1;
+    renderer.toneMappingExposure = 1.0;
     renderer.domElement.style.width = '100%';
     renderer.domElement.style.height = '100%';
     renderer.domElement.style.display = 'block';
@@ -350,29 +351,12 @@ export const GameCanvas: React.FC = () => {
         audioEngine.setScrapeVolume(0);
       }
 
-      // --- Realistic Particle Effects: Exhaust Smoke & Đề-pa Burnout Dirt ---
-      if (currentBikeParts && !state.isCrashed) {
-        const config = getBikeConfig(selectedBikeIdRef.current);
-        const isTwoStroke = config.engineCategory === '2-Stroke';
-
-        // 1. Exhaust Smoke billowing out the tail pipe
-        const exhaustPos = new THREE.Vector3();
-        currentBikeParts.exhaustEmitter.getWorldPosition(exhaustPos);
-        environment.emitExhaust(exhaustPos, state.rpmRatio, inputs.throttle, isTwoStroke, delta);
-
-        // 2. Launch (Đề-pa) Burnout Dirt & Tire Friction Smoke
-        const rearWheelPos = new THREE.Vector3(state.positionX, 0.04, state.positionZ - 0.85);
-        const isLaunching = inputs.throttle && state.speed < 8.0 && state.rpmRatio > 0.35;
-
-        if (isLaunching) {
-          environment.emitBurnout(rearWheelPos, state.rpmRatio, true);
-        } else if (inputs.throttle && state.speed >= 8.0) {
-          environment.emitBurnout(rearWheelPos, state.rpmRatio, false);
-        } else if (state.speed > 3.0) {
-          environment.emitBurnout(rearWheelPos, 0.2, false);
-        }
-      }
-
+      // Tire contact follows the same continuous surface as the rendered terrain.
+      const rearZ = state.positionZ - 0.85;
+      const rearHeight = terrainHeight(state.positionX, rearZ);
+      const frontHeight = terrainHeight(state.positionX, state.positionZ + 0.85);
+      const terrainPitch = Math.atan2(frontHeight - rearHeight, 1.7);
+      const groundHeight = rearHeight + 0.85 * Math.sin(terrainPitch);
       if (state.isCrashed && physics.crashTime < 0.1) {
         audioEngine.playCrashSound();
       }
@@ -380,12 +364,12 @@ export const GameCanvas: React.FC = () => {
       // --- Update 3D Bike Mesh Position & Rotations ---
       if (currentBikeParts) {
         // Keep rear contact patch on ground during wheelie
-        const rearWheelOffset = 0.85 * Math.sin(state.pitch);
+        const rearWheelOffset = 0.85 * Math.sin(state.pitch + terrainPitch);
 
         if (!state.isCrashed) {
-          currentBikeParts.bikeGroup.position.set(state.positionX, rearWheelOffset, state.positionZ);
+          currentBikeParts.bikeGroup.position.set(state.positionX, rearHeight + rearWheelOffset, state.positionZ);
           // In Three.js: -pitch lifts front (+Z) up around rear axle (-Z)!
-          currentBikeParts.bodyGroup.rotation.x = -state.pitch;
+          currentBikeParts.bodyGroup.rotation.x = -state.pitch - terrainPitch;
           currentBikeParts.bodyGroup.rotation.z = state.roll;
 
           const wheelRotationSpeed = state.speed * delta * 2.4;
@@ -396,7 +380,7 @@ export const GameCanvas: React.FC = () => {
           currentBikeParts.riderGroup.position.copy(initialRiderPosRef.current);
           currentBikeParts.riderGroup.rotation.x = state.pitch * 0.35;
         } else {
-          currentBikeParts.bikeGroup.position.set(state.positionX, rearWheelOffset, state.positionZ);
+          currentBikeParts.bikeGroup.position.set(state.positionX, rearHeight + rearWheelOffset, state.positionZ);
           currentBikeParts.bodyGroup.rotation.x = physics.bikeCrashRotation.x;
           // Restore from initial position plus non-accumulating crash offset
           currentBikeParts.riderGroup.position
@@ -405,9 +389,17 @@ export const GameCanvas: React.FC = () => {
         }
       }
 
+      // Emit after applying this frame's transforms, so effects stay attached to the bike.
+      if (currentBikeParts && !state.isCrashed) {
+        const config = getBikeConfig(selectedBikeIdRef.current);
+        const exhaustPos = new THREE.Vector3();
+        currentBikeParts.exhaustEmitter.getWorldPosition(exhaustPos);
+        environment.emitExhaust(exhaustPos, state.rpmRatio, inputs.throttle, config.engineCategory === '2-Stroke', delta);
+        environment.emitRidingDust(new THREE.Vector3(state.positionX, rearHeight + 0.045, rearZ), state.speed, inputs.throttle, delta);
+      }
       // --- Update Dynamic Camera with Mouse Orbit & Centered Target ---
       const targetX = state.positionX;
-      const targetY = 1.1 + state.pitch * 0.4;
+      const targetY = groundHeight + 1.1 + state.pitch * 0.4;
       const targetZ = state.positionZ;
 
       if (!state.isCrashed) {
@@ -426,7 +418,7 @@ export const GameCanvas: React.FC = () => {
         const offsetZ = -cosYaw * cosPitch * dist;
 
         const targetCamX = targetX + offsetX;
-        const targetCamY = Math.max(0.4, targetY + offsetY);
+        const targetCamY = Math.max(terrainHeight(targetCamX, targetZ + offsetZ) + 0.4, targetY + offsetY);
         const targetCamZ = targetZ + offsetZ;
 
         camera.position.x = THREE.MathUtils.lerp(camera.position.x, targetCamX, 12 * delta);
@@ -436,11 +428,11 @@ export const GameCanvas: React.FC = () => {
         // Character remains strictly centered in viewport frame
         camera.lookAt(targetX, targetY, targetZ);
       } else {
-        camera.lookAt(targetX, 0.5, targetZ);
+        camera.lookAt(targetX, groundHeight + 0.5, targetZ);
       }
 
       // --- Update Terrain Environment ---
-      environment.update(state.positionZ, delta);
+      environment.update(state.positionZ, delta, state.positionX);
 
       // --- Scoring System Logic ---
       if (state.isWheelieActive && !state.isCrashed) {
@@ -479,6 +471,7 @@ export const GameCanvas: React.FC = () => {
       if (container && renderer.domElement) {
         container.removeChild(renderer.domElement);
       }
+      environment.dispose();
       renderer.dispose();
     };
   }, []);
