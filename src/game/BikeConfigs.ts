@@ -32,6 +32,7 @@ export interface BikeConfig {
     offsetY: number;
     fenderTip: [number, number, number];
     riderOffset: [number, number, number];
+    exhaustTip?: [number, number, number];
   };
   stats: {
     topSpeedKmh: number;
@@ -62,6 +63,7 @@ export const BIKES_DATABASE: BikeConfig[] = [
       offsetY: 0.55,
       fenderTip: [0, 0.88, -1.08],
       riderOffset: [0, 0.88, -0.15],
+      exhaustTip: [0.18, 0.78, -0.95],
     },
     stats: {
       topSpeedKmh: 92,
@@ -100,6 +102,7 @@ export const BIKES_DATABASE: BikeConfig[] = [
       offsetY: 0.67,
       fenderTip: [0, 0.95, -1.15],
       riderOffset: [0, 0.96, -0.15],
+      exhaustTip: [0.22, 0.82, -0.98],
     },
     stats: {
       topSpeedKmh: 98,
@@ -138,6 +141,7 @@ export const BIKES_DATABASE: BikeConfig[] = [
       offsetY: 0.56,
       fenderTip: [0, 0.88, -1.05],
       riderOffset: [0, 0.88, -0.15],
+      exhaustTip: [0.18, 0.76, -0.92],
     },
     stats: {
       topSpeedKmh: 85,

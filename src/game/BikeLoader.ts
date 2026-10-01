@@ -119,6 +119,13 @@ export async function loadBikeModel(
   sparksEmitter.position.copy(fenderTip);
   bodyGroup.add(sparksEmitter);
 
+  // Exhaust Tip & Exhaust smoke emitter
+  const exhaustPos = transform.exhaustTip || [0.18, 0.78, -0.95];
+  const exhaustTip = new THREE.Vector3(exhaustPos[0], exhaustPos[1], exhaustPos[2]);
+  const exhaustEmitter = new THREE.Group();
+  exhaustEmitter.position.copy(exhaustTip);
+  bodyGroup.add(exhaustEmitter);
+
   // Dummy wheel groups so GameCanvas physics / rotation won't break
   const frontWheel = new THREE.Group();
   frontWheel.position.set(0, 0.44, 0.85);
@@ -136,5 +143,6 @@ export async function loadBikeModel(
     riderGroup,
     fenderTip,
     sparksEmitter,
+    exhaustEmitter,
   };
 }

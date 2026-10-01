@@ -29,10 +29,10 @@ export const GameCanvas: React.FC = () => {
   const orbitYawRef = useRef<number>(0);
   const orbitPitchRef = useRef<number>(0);
 
-  // Bike Selection State
   const [selectedBikeId, setSelectedBikeId] = useState<string>(() => {
     return localStorage.getItem(SELECTED_BIKE_KEY) || DEFAULT_BIKE_ID;
   });
+  const selectedBikeIdRef = useRef<string>(selectedBikeId);
   const [isGarageOpen, setIsGarageOpen] = useState<boolean>(false);
   const [isBikeLoading, setIsBikeLoading] = useState<boolean>(false);
   const [loadProgress, setLoadProgress] = useState<number>(0);
@@ -132,6 +132,7 @@ export const GameCanvas: React.FC = () => {
       physicsRef.current.applyBikeTuning(config.physics);
       audioEngine.setSoundProfile(config.soundType);
 
+      selectedBikeIdRef.current = bikeId;
       setSelectedBikeId(bikeId);
       localStorage.setItem(SELECTED_BIKE_KEY, bikeId);
       setIsGarageOpen(false);
@@ -239,7 +240,9 @@ export const GameCanvas: React.FC = () => {
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFShadowMap;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.1;
     renderer.domElement.style.width = '100%';
     renderer.domElement.style.height = '100%';
     renderer.domElement.style.display = 'block';
@@ -322,7 +325,6 @@ export const GameCanvas: React.FC = () => {
 
       // --- Update Audio ---
       audioEngine.updateEngine(state.rpmRatio, inputs.throttle);
-      audioEngine.setBrakeVolume(inputs.rearBrake && state.speed > 2 ? 0.3 : 0);
 
       const currentBikeParts = bikePartsRef.current;
 
@@ -331,16 +333,33 @@ export const GameCanvas: React.FC = () => {
         if (currentBikeParts) {
           const worldPos = new THREE.Vector3();
           currentBikeParts.sparksEmitter.getWorldPosition(worldPos);
-          environment.emitSparks(worldPos, 4);
+          environment.emitSparks(worldPos, 6);
         }
       } else {
         audioEngine.setScrapeVolume(0);
       }
 
-      // Emit dirt dust from rear wheel when moving
-      if (state.speed > 2 && currentBikeParts) {
-        const rearWheelPos = new THREE.Vector3(state.positionX, 0.1, state.positionZ - 0.85);
-        environment.emitDust(rearWheelPos, inputs.throttle ? 4 : 1);
+      // --- Realistic Particle Effects: Exhaust Smoke & Đề-pa Burnout Dirt ---
+      if (currentBikeParts && !state.isCrashed) {
+        const config = getBikeConfig(selectedBikeIdRef.current);
+        const isTwoStroke = config.engineCategory === '2-Stroke';
+
+        // 1. Exhaust Smoke billowing out the tail pipe
+        const exhaustPos = new THREE.Vector3();
+        currentBikeParts.exhaustEmitter.getWorldPosition(exhaustPos);
+        environment.emitExhaust(exhaustPos, state.rpmRatio, inputs.throttle, isTwoStroke, delta);
+
+        // 2. Launch (Đề-pa) Burnout Dirt & Tire Friction Smoke
+        const rearWheelPos = new THREE.Vector3(state.positionX, 0.04, state.positionZ - 0.85);
+        const isLaunching = inputs.throttle && state.speed < 8.0 && state.rpmRatio > 0.35;
+
+        if (isLaunching) {
+          environment.emitBurnout(rearWheelPos, state.rpmRatio, true);
+        } else if (inputs.throttle && state.speed >= 8.0) {
+          environment.emitBurnout(rearWheelPos, state.rpmRatio, false);
+        } else if (state.speed > 3.0) {
+          environment.emitBurnout(rearWheelPos, 0.2, false);
+        }
       }
 
       if (state.isCrashed && physics.crashTime < 0.1) {

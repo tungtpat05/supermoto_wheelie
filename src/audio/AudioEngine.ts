@@ -15,8 +15,6 @@ class AudioEngine {
   private scrapeGain: GainNode | null = null;
   private scrapeFilter: BiquadFilterNode | null = null;
 
-  // Brake squeal sound nodes
-  private brakeGain: GainNode | null = null;
 
   // Engine sound profile
   private soundProfile: '4stroke_deep' | '2stroke_heavy' | '2stroke_screamer' = '4stroke_deep';
@@ -94,9 +92,6 @@ class AudioEngine {
       // Scrape Fender Noise
       this.setupScrapeSound();
 
-      // Brake Squeal Noise
-      this.setupBrakeSound();
-
       this.isInitialized = true;
     } catch (e) {
       console.warn('AudioContext failed to initialize:', e);
@@ -131,33 +126,6 @@ class AudioEngine {
     whiteNoise.start();
   }
 
-  private setupBrakeSound() {
-    if (!this.ctx) return;
-
-    const bufferSize = this.ctx.sampleRate * 2;
-    const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-    const output = noiseBuffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      output[i] = Math.random() * 2 - 1;
-    }
-
-    const noise = this.ctx.createBufferSource();
-    noise.buffer = noiseBuffer;
-    noise.loop = true;
-
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = 'highpass';
-    filter.frequency.setValueAtTime(1800, this.ctx.currentTime);
-
-    this.brakeGain = this.ctx.createGain();
-    this.brakeGain.gain.setValueAtTime(0, this.ctx.currentTime);
-
-    noise.connect(filter);
-    filter.connect(this.brakeGain);
-    this.brakeGain.connect(this.ctx.destination);
-    noise.start();
-  }
-
   public updateEngine(rpmRatio: number, isAccelerating: boolean) {
     if (!this.isInitialized || !this.ctx || this.isMuted) return;
 
@@ -187,11 +155,8 @@ class AudioEngine {
     }
   }
 
-  public setBrakeVolume(volume: number) {
-    if (!this.isInitialized || !this.ctx || this.isMuted) return;
-    if (this.brakeGain) {
-      this.brakeGain.gain.setTargetAtTime(Math.min(0.3, Math.max(0, volume)), this.ctx.currentTime, 0.05);
-    }
+  public setBrakeVolume(_volume: number) {
+    // Hissing brake sound removed
   }
 
   public playCrashSound() {

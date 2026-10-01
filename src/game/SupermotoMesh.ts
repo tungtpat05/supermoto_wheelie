@@ -9,6 +9,7 @@ export interface SupermotoParts {
   riderGroup: THREE.Group;
   fenderTip: THREE.Vector3;
   sparksEmitter: THREE.Group;
+  exhaustEmitter: THREE.Group;
 }
 
 export function createSupermotoBike(): SupermotoParts {
@@ -243,6 +244,12 @@ export function createSupermotoBike(): SupermotoParts {
   sparksEmitter.position.copy(fenderTip);
   bodyGroup.add(sparksEmitter);
 
+  // --- 8. EXHAUST EMITTER GROUP ---
+  const exhaustTip = new THREE.Vector3(0.16, 0.84, -0.98);
+  const exhaustEmitter = new THREE.Group();
+  exhaustEmitter.position.copy(exhaustTip);
+  bodyGroup.add(exhaustEmitter);
+
   return {
     bikeGroup,
     bodyGroup,
@@ -251,5 +258,6 @@ export function createSupermotoBike(): SupermotoParts {
     riderGroup,
     fenderTip,
     sparksEmitter,
+    exhaustEmitter,
   };
 }
