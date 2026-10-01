@@ -188,7 +188,10 @@ class AudioEngine {
   public toggleMute(): boolean {
     this.isMuted = !this.isMuted;
     if (this.engineGain && this.ctx) {
+      this.engineGain.gain.cancelScheduledValues(this.ctx.currentTime);
       this.engineGain.gain.setValueAtTime(this.isMuted ? 0 : 0.2, this.ctx.currentTime);
+      this.scrapeGain?.gain.cancelScheduledValues(this.ctx.currentTime);
+      this.scrapeGain?.gain.setValueAtTime(0, this.ctx.currentTime);
     }
     return this.isMuted;
   }

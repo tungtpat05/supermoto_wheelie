@@ -12,6 +12,7 @@ export interface PhysicsState {
   steering: number; // steering angle
   positionZ: number; // forward distance (meters)
   positionX: number; // lateral position (meters)
+  wheelieDistance: number; // Distance in the current wheelie; zero on front tire contact.
   isWheelieActive: boolean;
   isSweetSpot: boolean;
   isScrapingFender: boolean;
@@ -29,6 +30,7 @@ export class PhysicsEngine {
   public steering: number = 0;
   public positionZ: number = 0;
   public positionX: number = 0;
+  public wheelieDistance: number = 0;
 
   // Crash State
   public isCrashed: boolean = false;
@@ -84,6 +86,7 @@ export class PhysicsEngine {
     this.steering = 0;
     this.positionZ = 0;
     this.positionX = 0;
+    this.wheelieDistance = 0;
     this.isCrashed = false;
     this.crashReason = '';
     this.crashTime = 0;
@@ -102,6 +105,7 @@ export class PhysicsEngine {
     }
   ): PhysicsState {
     if (this.isCrashed) {
+      this.wheelieDistance = 0;
       this.crashTime += delta;
       // Animate crash physics: bike rolls over and slides forward
       this.speed = Math.max(0, this.speed - 12 * delta);
@@ -113,6 +117,8 @@ export class PhysicsEngine {
       return this.getState();
     }
 
+    const previousX = this.positionX;
+    const previousZ = this.positionZ;
     // --- 1. Forward Speed Dynamics ---
     let accel = 0;
     if (inputs.throttle) {
@@ -202,6 +208,9 @@ export class PhysicsEngine {
       this.triggerCrash('Lộn Ngửa Đằng Sau! (Góc bốc vượt quá 90°)');
     }
 
+    this.wheelieDistance = this.pitch > 0 && !this.isCrashed
+      ? this.wheelieDistance + Math.hypot(this.positionX - previousX, this.positionZ - previousZ)
+      : 0;
     return this.getState();
   }
 
@@ -231,6 +240,7 @@ export class PhysicsEngine {
       steering: this.steering,
       positionZ: this.positionZ,
       positionX: this.positionX,
+      wheelieDistance: this.wheelieDistance,
       isWheelieActive,
       isSweetSpot,
       isScrapingFender,

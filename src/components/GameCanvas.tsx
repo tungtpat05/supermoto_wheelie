@@ -6,12 +6,12 @@ import { terrainHeight } from '../game/SteppeTerrain';
 import { PhysicsEngine, type PhysicsState } from '../game/PhysicsEngine';
 import { audioEngine } from '../audio/AudioEngine';
 import { HUD } from './HUD';
-import { GarageModal } from './GarageModal';
+import { QUALITY_PRESETS, isGraphicsQuality, type GraphicsQuality } from '../game/GraphicsQuality';
 import { DEFAULT_BIKE_ID, getBikeConfig } from '../game/BikeConfigs';
 import { loadBikeModel } from '../game/BikeLoader';
 
-const BEST_SCORE_KEY = 'supermoto_wheelie_best_score';
-const BEST_DIST_KEY = 'supermoto_wheelie_best_dist';
+const QUALITY_KEY = 'supermoto_wheelie_quality';
+
 const SELECTED_BIKE_KEY = 'supermoto_wheelie_selected_bike';
 
 export const GameCanvas: React.FC = () => {
@@ -32,11 +32,19 @@ export const GameCanvas: React.FC = () => {
   const cameraDistanceRef = useRef<number>(4.8);
 
   const [selectedBikeId, setSelectedBikeId] = useState<string>(() => {
-    return localStorage.getItem(SELECTED_BIKE_KEY) || DEFAULT_BIKE_ID;
+    return getBikeConfig(localStorage.getItem(SELECTED_BIKE_KEY) || DEFAULT_BIKE_ID).id;
   });
   const selectedBikeIdRef = useRef<string>(selectedBikeId);
-  const [isGarageOpen, setIsGarageOpen] = useState<boolean>(false);
-  const [isBikeLoading, setIsBikeLoading] = useState<boolean>(false);
+  const [quality, setQuality] = useState<GraphicsQuality>(() => {
+    const saved = localStorage.getItem(QUALITY_KEY);
+    return isGraphicsQuality(saved) ? saved : 'High';
+  });
+  const qualityRef = useRef(quality);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const [fps, setFps] = useState(0);
+  const [bikeError, setBikeError] = useState('');
+  const bikeLoadingRef = useRef(true);
+  const [isBikeLoading, setIsBikeLoading] = useState<boolean>(true);
   const [loadProgress, setLoadProgress] = useState<number>(0);
 
   // Keyboard Inputs State
@@ -48,46 +56,21 @@ export const GameCanvas: React.FC = () => {
     steerRight: false,
   });
 
-  // Gameplay Scoring State
-  const [score, setScore] = useState<number>(0);
-  const [multiplier, setMultiplier] = useState<number>(1);
-  const [bestScore, setBestScore] = useState<number>(0);
-  const [bestDistance, setBestDistance] = useState<number>(0);
-  const [physicsState, setPhysicsState] = useState<PhysicsState>(() => physicsRef.current.getState());
+  const [physicsState, setPhysicsState] = useState<PhysicsState>(() => new PhysicsEngine().getState());
 
-  const checkHighScoresRef = useRef<(s: number, d: number) => void>(() => { });
-
-  // Load High Scores from Local Storage
-  useEffect(() => {
-    const savedScore = localStorage.getItem(BEST_SCORE_KEY);
-    const savedDist = localStorage.getItem(BEST_DIST_KEY);
-    if (savedScore) setBestScore(parseFloat(savedScore));
-    if (savedDist) setBestDistance(parseInt(savedDist, 10));
+  const changeQuality = useCallback((next: GraphicsQuality) => {
+    qualityRef.current = next;
+    setQuality(next);
+    localStorage.setItem(QUALITY_KEY, next);
+    const preset = QUALITY_PRESETS[next];
+    const renderer = rendererRef.current;
+    if (renderer) {
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, preset.pixelRatio));
+      renderer.shadowMap.enabled = preset.shadows;
+      renderer.shadowMap.needsUpdate = true;
+    }
+    environmentRef.current?.setQuality(next);
   }, []);
-
-  // Update & Save High Score
-  const checkNewHighScores = useCallback((finalScore: number, finalDist: number) => {
-    setBestScore((prevBest) => {
-      if (finalScore > prevBest) {
-        localStorage.setItem(BEST_SCORE_KEY, finalScore.toString());
-        return finalScore;
-      }
-      return prevBest;
-    });
-
-    setBestDistance((prevDist) => {
-      if (finalDist > prevDist) {
-        localStorage.setItem(BEST_DIST_KEY, finalDist.toString());
-        return finalDist;
-      }
-      return prevDist;
-    });
-  }, []);
-
-  useEffect(() => {
-    checkHighScoresRef.current = checkNewHighScores;
-  }, [checkNewHighScores]);
-
   // Restart Handler (Fixed: reset physics, environment terrain segments, rider and bike transforms)
   const handleRestart = useCallback(() => {
     physicsRef.current.reset();
@@ -104,13 +87,15 @@ export const GameCanvas: React.FC = () => {
       bikePartsRef.current.riderGroup.rotation.set(0, 0, 0);
     }
 
-    setScore(0);
-    setMultiplier(1);
+
     setPhysicsState(physicsRef.current.getState());
   }, []);
 
   // Switch Bike Model Handler
   const switchBike = useCallback(async (bikeId: string) => {
+    if (bikeLoadingRef.current || bikeId === selectedBikeIdRef.current) return;
+    bikeLoadingRef.current = true;
+    setBikeError('');
     const config = getBikeConfig(bikeId);
     setIsBikeLoading(true);
     setLoadProgress(15);
@@ -138,10 +123,12 @@ export const GameCanvas: React.FC = () => {
       selectedBikeIdRef.current = bikeId;
       setSelectedBikeId(bikeId);
       localStorage.setItem(SELECTED_BIKE_KEY, bikeId);
-      setIsGarageOpen(false);
+
     } catch (err) {
       console.error('Failed to switch bike:', err);
+      setBikeError('Không tải được xe. Vui lòng chọn lại.');
     } finally {
+      bikeLoadingRef.current = false;
       setIsBikeLoading(false);
     }
   }, []);
@@ -151,15 +138,9 @@ export const GameCanvas: React.FC = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       audioEngine.init();
 
-      if (e.code === 'KeyG') {
-        setIsGarageOpen((prev) => !prev);
-        inputsRef.current.throttle = false;
-        inputsRef.current.leanBack = false;
-        return;
-      }
-
-      if (isGarageOpen) return;
-
+      if (e.target instanceof HTMLElement && e.target.closest('select, input, textarea')) return;
+      if (e.target instanceof HTMLElement && e.target.closest('button') && ['Space', 'Enter'].includes(e.code)) return;
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
       if (e.code === 'KeyW' || e.code === 'ArrowUp') inputsRef.current.throttle = true;
       if (e.code === 'KeyS' || e.code === 'ArrowDown') inputsRef.current.rearBrake = true;
       if (e.code === 'Space' || e.shiftKey) inputsRef.current.leanBack = true;
@@ -179,14 +160,19 @@ export const GameCanvas: React.FC = () => {
       if (e.code === 'KeyD' || e.code === 'ArrowRight') inputsRef.current.steerRight = false;
     };
 
+    const releaseInputs = () => {
+      inputsRef.current = { throttle: false, rearBrake: false, leanBack: false, steerLeft: false, steerRight: false };
+    };
+    window.addEventListener('blur', releaseInputs);
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
 
     return () => {
+      window.removeEventListener('blur', releaseInputs);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [handleRestart, isGarageOpen]);
+  }, [handleRestart]);
 
   // Pointer / Mouse Camera Look Handlers
   const onPointerDown = useCallback((e: React.PointerEvent) => {
@@ -250,8 +236,10 @@ export const GameCanvas: React.FC = () => {
     // Renderer
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
+    rendererRef.current = renderer;
+    const preset = QUALITY_PRESETS[qualityRef.current];
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, preset.pixelRatio));
+    renderer.shadowMap.enabled = preset.shadows;
     renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.0;
@@ -264,16 +252,19 @@ export const GameCanvas: React.FC = () => {
     // Environment
     const environment = new EnvironmentManager(scene);
     environmentRef.current = environment;
+    environment.setQuality(qualityRef.current);
 
     // Initial Bike Setup
-    const initialBikeId = localStorage.getItem(SELECTED_BIKE_KEY) || DEFAULT_BIKE_ID;
+    let disposed = false;
+    const initialBikeId = selectedBikeIdRef.current;
     const initialConfig = getBikeConfig(initialBikeId);
     physicsRef.current.applyBikeTuning(initialConfig.physics);
     audioEngine.setSoundProfile(initialConfig.soundType);
 
     // Load initial bike model
-    loadBikeModel(initialBikeId)
+    loadBikeModel(initialBikeId, progress => { if (!disposed) setLoadProgress(progress); })
       .then((parts) => {
+        if (disposed) return;
         if (parts.riderGroup) {
           initialRiderPosRef.current.copy(parts.riderGroup.position);
         }
@@ -286,6 +277,7 @@ export const GameCanvas: React.FC = () => {
         bikePartsRef.current = parts;
       })
       .catch((err) => {
+        if (disposed) return;
         console.warn('Initial bike load fallback:', err);
         const fallback = createSupermotoBike();
         if (fallback.riderGroup) {
@@ -293,6 +285,12 @@ export const GameCanvas: React.FC = () => {
         }
         bikePartsRef.current = fallback;
         scene.add(fallback.bikeGroup);
+        setBikeError('Không tải được mẫu xe. Đang dùng xe dự phòng.');
+      })
+      .finally(() => {
+        if (disposed) return;
+        bikeLoadingRef.current = false;
+        setIsBikeLoading(false);
       });
 
     // Resize Handler
@@ -313,13 +311,26 @@ export const GameCanvas: React.FC = () => {
     let animationFrameId: number;
     let lastTime = performance.now();
     let hudUpdateTimer = 0;
-    let currentScore = 0;
-    let currentMult = 1;
-    let sweetSpotTimer = 0;
+    let fpsTime = 0;
+    let fpsFrames = 0;
 
     // Animation Game Loop
     const animate = (time: number) => {
-      const delta = Math.min(0.1, (time - lastTime) / 1000);
+      const frameSeconds = (time - lastTime) / 1000;
+      const delta = Math.min(0.1, frameSeconds);
+      if (frameSeconds < 1 && !document.hidden) {
+        fpsTime += frameSeconds;
+        fpsFrames++;
+        if (fpsTime >= 0.5) {
+          setFps(Math.round(fpsFrames / fpsTime));
+          fpsTime = 0;
+          fpsFrames = 0;
+        }
+      } else {
+        fpsTime = 0;
+        fpsFrames = 0;
+        setFps(0);
+      }
       lastTime = time;
 
       const physics = physicsRef.current;
@@ -434,31 +445,6 @@ export const GameCanvas: React.FC = () => {
       // --- Update Terrain Environment ---
       environment.update(state.positionZ, delta, state.positionX);
 
-      // --- Scoring System Logic ---
-      if (state.isWheelieActive && !state.isCrashed) {
-        if (state.isSweetSpot) {
-          sweetSpotTimer += delta;
-          if (sweetSpotTimer > 1.2) currentMult = 2;
-          if (sweetSpotTimer > 3.0) currentMult = 4;
-          if (sweetSpotTimer > 5.5) currentMult = 8;
-          if (sweetSpotTimer > 9.0) currentMult = 10;
-        } else {
-          sweetSpotTimer = Math.max(0, sweetSpotTimer - delta * 2);
-          currentMult = 1;
-        }
-
-        const pointGain = state.speed * state.pitch * currentMult * delta * 45;
-        currentScore += pointGain;
-
-        setScore(Math.floor(currentScore));
-        setMultiplier(currentMult);
-      } else if (state.isCrashed) {
-        checkHighScoresRef.current(currentScore, Math.floor(state.positionZ));
-      } else {
-        sweetSpotTimer = 0;
-        currentMult = 1;
-      }
-
       renderer.render(scene, camera);
       animationFrameId = requestAnimationFrame(animate);
     };
@@ -466,6 +452,7 @@ export const GameCanvas: React.FC = () => {
     animationFrameId = requestAnimationFrame(animate);
 
     return () => {
+      disposed = true;
       cancelAnimationFrame(animationFrameId);
       window.removeEventListener('resize', handleResize);
       if (container && renderer.domElement) {
@@ -473,10 +460,11 @@ export const GameCanvas: React.FC = () => {
       }
       environment.dispose();
       renderer.dispose();
+      rendererRef.current = null;
     };
   }, []);
 
-  const currentConfig = getBikeConfig(selectedBikeId);
+
 
   return (
     <div
@@ -491,24 +479,16 @@ export const GameCanvas: React.FC = () => {
       <div ref={containerRef} className="three-canvas-container" />
       <HUD
         physicsState={physicsState}
-        score={score}
-        multiplier={multiplier}
-        bestScore={bestScore}
-        bestDistance={bestDistance}
-        currentBikeName={currentConfig.name}
-        currentBikeColor={currentConfig.color}
+        fps={fps}
+        quality={quality}
+        onQualityChange={changeQuality}
+        selectedBikeId={selectedBikeId}
+        onBikeChange={switchBike}
+        isBikeLoading={isBikeLoading}
+        loadProgress={loadProgress}
+        bikeError={bikeError}
         onRestart={handleRestart}
-        onOpenGarage={() => setIsGarageOpen(true)}
       />
-      {isGarageOpen && (
-        <GarageModal
-          currentBikeId={selectedBikeId}
-          onSelectBike={switchBike}
-          onClose={() => setIsGarageOpen(false)}
-          isLoading={isBikeLoading}
-          loadProgress={loadProgress}
-        />
-      )}
     </div>
   );
 };

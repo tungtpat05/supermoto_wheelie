@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { HDRLoader } from 'three/examples/jsm/loaders/HDRLoader.js';
 import { RealisticParticleSystem } from './RealisticParticleSystem';
 import { terrainHeight, terrainWear } from './SteppeTerrain';
+import { QUALITY_PRESETS, type GraphicsQuality } from './GraphicsQuality';
 
 const LENGTH = 160;
 const COUNT = 12;
@@ -11,6 +12,7 @@ interface TerrainTile {
   ground: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>;
   grass: THREE.InstancedMesh;
   seed: number;
+  fullGrassCount: number;
 }
 
 export class EnvironmentManager {
@@ -21,6 +23,7 @@ export class EnvironmentManager {
   private sun = new THREE.DirectionalLight(0xffd296, 2.1);
   private wind = { value: 0 };
   private disposed = false;
+  private quality: GraphicsQuality = 'High';
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -141,7 +144,7 @@ export class EnvironmentManager {
       ground.receiveShadow = true;
       const grass = new THREE.InstancedMesh(blade, grassMat, GRASS_COUNT);
       grass.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      const tile = { ground, grass, seed: 1234 + i * 97 };
+      const tile = { ground, grass, seed: 1234 + i * 97, fullGrassCount: 0 };
       this.tiles.push(tile);
       this.placeTile(tile, (i - 3) * LENGTH);
       this.scene.add(ground, grass);
@@ -174,7 +177,8 @@ export class EnvironmentManager {
       color.setHSL(.13 + random() * .095, .27 + random() * .16, .26 + random() * .17);
       tile.grass.setColorAt(count++, color);
     }
-    tile.grass.count = count;
+    tile.fullGrassCount = count;
+    tile.grass.count = Math.floor(count * QUALITY_PRESETS[this.quality].grassDensity);
     tile.grass.instanceMatrix.needsUpdate = true;
     if (tile.grass.instanceColor) tile.grass.instanceColor.needsUpdate = true;
     tile.grass.computeBoundingSphere();
@@ -190,6 +194,21 @@ export class EnvironmentManager {
 
   public emitSparks(pos: THREE.Vector3, count = 4) { this.particleSystem.emitSparks(pos, count); }
 
+  public setQuality(quality: GraphicsQuality) {
+    this.quality = quality;
+    const preset = QUALITY_PRESETS[quality];
+    this.sun.castShadow = preset.shadows;
+    if (this.sun.shadow.mapSize.x !== preset.shadowSize) {
+      this.sun.shadow.map?.dispose();
+      this.sun.shadow.map = null;
+      this.sun.shadow.mapSize.set(preset.shadowSize, preset.shadowSize);
+    }
+    this.tiles.forEach(tile => {
+      tile.grass.count = Math.floor(tile.fullGrassCount * preset.grassDensity);
+      tile.grass.computeBoundingSphere();
+    });
+  }
+
   public reset() {
     this.tiles.forEach((tile, i) => this.placeTile(tile, (i - 3) * LENGTH));
     this.particleSystem.reset();
@@ -202,6 +221,7 @@ export class EnvironmentManager {
       while (z < playerZ - 3.5 * LENGTH) z += COUNT * LENGTH;
       while (z > playerZ + 8.5 * LENGTH) z -= COUNT * LENGTH;
       if (z !== tile.ground.position.z) this.placeTile(tile, z);
+      tile.grass.visible = Math.abs(z - playerZ) < QUALITY_PRESETS[this.quality].grassDistance + LENGTH / 2;
     }
     this.backdrop.position.set(playerX * .7, 0, playerZ);
     this.sun.position.set(playerX - 65, 45, playerZ + 75);

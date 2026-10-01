@@ -42,6 +42,20 @@ try {
     const { EnvironmentManager } = await server.ssrLoadModule('/src/game/EnvironmentManager.ts');
     const scene = new THREE.Scene();
     const env = new EnvironmentManager(scene);
+    const { QUALITY_PRESETS } = await server.ssrLoadModule('/src/game/GraphicsQuality.ts');
+    let previousGrassCount = 0;
+    for (const [quality, preset] of Object.entries(QUALITY_PRESETS)) {
+      env.setQuality(quality);
+      env.update(0, 0);
+      const grass = scene.children.filter(o => o.isInstancedMesh);
+      const count = grass.reduce((sum, mesh) => sum + mesh.count, 0);
+      assert.ok(count > previousGrassCount, `${quality} must increase grass density`);
+      previousGrassCount = count;
+      const sun = scene.children.find(o => o.isDirectionalLight);
+      assert.equal(sun.castShadow, preset.shadows);
+      assert.equal(sun.shadow.mapSize.x, preset.shadowSize);
+    }
+    console.log('PASS Low / Medium / High / Ultra: grass density and shadow settings');
     for (const z of [0, 561, 2800, 12000, 0]) {
       env.update(z, 1 / 60, 190);
       const grounds = scene.children.filter(o => o.isMesh && o.geometry.type === 'PlaneGeometry').sort((a, b) => a.position.z - b.position.z);
