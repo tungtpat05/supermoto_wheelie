@@ -28,9 +28,9 @@ its debug contact marker turns orange. Adjust the target or bone lengths.
 
 ## Debug
 
-During `npm run dev`, check **RIDER DEBUG** in the game HUD, or set
-`RIDER_DEBUG_ENABLED = true` in `RiderConfig.ts` to enable it initially.
-Production builds do not construct debug markers or show the toggle.
+During `npm run dev`, set `RIDER_DEBUG_ENABLED = true` in `RiderConfig.ts`
+to enable markers in the game. The game HUD has no debug toggle.
+Production builds do not construct debug markers.
 
 Marker colors: yellow seat, green left grip, cyan right grip, pink left peg,
 purple right peg, white helmet center. Debug markers render through the model.

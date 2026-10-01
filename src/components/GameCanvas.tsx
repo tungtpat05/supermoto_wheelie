@@ -56,7 +56,6 @@ export const GameCanvas: React.FC = () => {
   const [selectedHelmetId, setSelectedHelmetId] = useState(DEFAULT_HELMET_ID);
   const [helmetLoading, setHelmetLoading] = useState(false);
   const [helmetError, setHelmetError] = useState('');
-  const [riderDebug, setRiderDebug] = useState(RIDER_DEBUG_ENABLED);
 
   // Keyboard Inputs State
   const inputsRef = useRef({
@@ -174,8 +173,8 @@ export const GameCanvas: React.FC = () => {
   }, [selectedHelmetId, isBikeLoading]);
 
   useEffect(() => {
-    bikePartsRef.current?.rider.debug?.setEnabled(riderDebug);
-  }, [riderDebug, isBikeLoading]);
+    bikePartsRef.current?.rider.debug?.setEnabled(RIDER_DEBUG_ENABLED);
+  }, [isBikeLoading]);
 
   // Keyboard Event Handlers
   useEffect(() => {
@@ -578,8 +577,6 @@ export const GameCanvas: React.FC = () => {
         onHelmetChange={setSelectedHelmetId}
         helmetLoading={helmetLoading}
         helmetError={helmetError}
-        riderDebug={riderDebug}
-        onRiderDebugChange={setRiderDebug}
       />
     </div>
   );

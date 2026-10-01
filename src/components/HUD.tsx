@@ -26,8 +26,6 @@ interface HUDProps {
   onHelmetChange: (id: string) => void;
   helmetLoading: boolean;
   helmetError: string;
-  riderDebug: boolean;
-  onRiderDebugChange: (enabled: boolean) => void;
 }
 
 const formatRecordTime = (timestamp: number) => {
@@ -41,7 +39,7 @@ export const HUD: React.FC<HUDProps> = ({
   physicsState, measuredPitchDeg, fps, engineRunning, enginePrompt, quality, onQualityChange, selectedBikeId, onBikeChange,
   isBikeLoading, loadProgress, bikeError, onRestart,
   wheelieHistory, bestWheelie,
-  selectedHelmetId, onHelmetChange, helmetLoading, helmetError, riderDebug, onRiderDebugChange,
+  selectedHelmetId, onHelmetChange, helmetLoading, helmetError,
 }) => {
   const [isMuted, setIsMuted] = useState(() => audioEngine.getMuted());
   const pitch = Math.min(90, Math.max(0, measuredPitchDeg));
@@ -53,9 +51,14 @@ export const HUD: React.FC<HUDProps> = ({
   return (
     <div className="ride-hud" onPointerDown={e => e.stopPropagation()} onWheel={e => e.stopPropagation()}>
       <div className="ride-top">
-        <div className="hud-panel ride-distance" title="Quãng đường mỗi lần bốc đầu. Về 0 khi bánh trước chạm đất.">
-          <span className="hud-caption">QUÃNG ĐƯỜNG</span>
-          <span className="distance-number" data-testid="wheelie-distance">{physicsState.wheelieDistance.toFixed(1)} <small>m</small></span>
+        <div className="ride-stats">
+          <div className="hud-panel ride-distance" title="Quãng đường mỗi lần bốc đầu. Về 0 khi bánh trước chạm đất.">
+            <span className="hud-caption">QUÃNG ĐƯỜNG</span>
+            <span className="distance-number" data-testid="wheelie-distance">{physicsState.wheelieDistance.toFixed(1)} <small>m</small></span>
+          </div>
+          <div className="hud-panel ride-speed" aria-label="Vận tốc">
+            <span className="hud-caption">KM/H</span><strong>{physicsState.speedKmh}</strong>
+          </div>
         </div>
         <nav className="ride-menu" aria-label="Cài đặt trò chơi">
           <div className="hud-panel menu-item fps-item" aria-label="Tốc độ khung hình">
@@ -67,13 +70,25 @@ export const HUD: React.FC<HUDProps> = ({
               {Object.keys(QUALITY_PRESETS).map(level => <option key={level} value={level}>{level}</option>)}
             </select>
           </label>
-          <label className="hud-panel menu-item bike-item">
-            <span className="hud-caption">BIKE</span>
-            <select aria-label="Bike" value={selectedBikeId} disabled={isBikeLoading} onChange={e => onBikeChange(e.target.value)}>
-              {BIKES_DATABASE.map(bike => <option key={bike.id} value={bike.id}>{bike.name}</option>)}
-            </select>
-          </label>
-          <div className="hud-panel menu-item">
+          <div className="bike-helmet-controls">
+            <label className="hud-panel menu-item bike-item">
+              <span className="hud-caption">BIKE</span>
+              <select aria-label="Bike" value={selectedBikeId} disabled={isBikeLoading} onChange={e => onBikeChange(e.target.value)}>
+                {BIKES_DATABASE.map(bike => <option key={bike.id} value={bike.id}>{bike.name}</option>)}
+              </select>
+            </label>
+            <label className="hud-panel menu-item helmet-item" title={helmetError || undefined}>
+              <span className="hud-caption">HELMET</span>
+              <select aria-label="Helmet" value={selectedHelmetId} onChange={e => onHelmetChange(e.target.value)}>
+                {HELMETS_DATABASE.length === 0 && <option value="">Chưa có nón</option>}
+                {HELMETS_DATABASE.map(helmet => <option key={helmet.id} value={helmet.id}>{helmet.name}</option>)}
+              </select>
+              {(helmetLoading || helmetError) && <span className="helmet-status" role="status">
+                {helmetError ? 'Lỗi tải nón' : 'Đang tải…'}
+              </span>}
+            </label>
+          </div>
+          <div className="hud-panel menu-item sound-item">
             <span className="hud-caption">SOUND</span>
             <button type="button" aria-label="Âm thanh" aria-pressed={!isMuted} onClick={() => {
               audioEngine.init();
@@ -85,22 +100,6 @@ export const HUD: React.FC<HUDProps> = ({
         {(isBikeLoading || bikeError) && <div className="hud-panel bike-notice" role="status">
           {isBikeLoading ? `Đang tải xe · ${Math.round(loadProgress)}%` : bikeError}
         </div>}
-      </div>
-      <div className="ride-rider-tools">
-        <label className="hud-panel menu-item helmet-item" title={helmetError || undefined}>
-          <span className="hud-caption">HELMET</span>
-          <select aria-label="Helmet" value={selectedHelmetId} onChange={e => onHelmetChange(e.target.value)}>
-            {HELMETS_DATABASE.length === 0 && <option value="">Chưa có nón</option>}
-            {HELMETS_DATABASE.map(helmet => <option key={helmet.id} value={helmet.id}>{helmet.name}</option>)}
-          </select>
-          {(helmetLoading || helmetError) && <span className="helmet-status" role="status">
-            {helmetError ? 'Lỗi tải nón' : 'Đang tải…'}
-          </span>}
-        </label>
-        {import.meta.env.DEV && <label className="hud-panel menu-item rider-debug-toggle">
-          <input type="checkbox" aria-label="Rider debug" checked={riderDebug} onChange={e => onRiderDebugChange(e.target.checked)} />
-          <span className="hud-caption">RIDER DEBUG</span>
-        </label>}
       </div>
       <section className="hud-panel ride-history" aria-label="Lịch sử bốc đầu">
         <div className="history-best">
@@ -140,7 +139,10 @@ export const HUD: React.FC<HUDProps> = ({
           <button type="button" onClick={onRestart} title="Thử lại (R)"><kbd>R</kbd> — Thử lại</button>
         </div>
       </div>
-      <div className="hud-panel ride-speed" aria-label="Vận tốc"><strong>{physicsState.speedKmh}</strong><span className="hud-caption">KM/H</span></div>
+      <nav className="ride-links" aria-label="Liên kết dự án">
+        <a className="hud-panel ride-link" href="https://github.com/tungtpat05/supermoto_wheelie" target="_blank" rel="noopener noreferrer">Source</a>
+        <a className="hud-panel ride-link" href="https://www.facebook.com/nguyentungtpat" target="_blank" rel="noopener noreferrer">Author</a>
+      </nav>
 
       {physicsState.isCrashed && <div className="ride-crash-overlay">
         <section className="hud-panel ride-crash" role="dialog" aria-modal="true" aria-labelledby="crash-title">

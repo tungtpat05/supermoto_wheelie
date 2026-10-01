@@ -15,11 +15,13 @@ button, select { font: inherit; }
 .ride-hud { position: absolute; inset: 0; z-index: 10; pointer-events: none; font-size: 12px; color: #efefdf; }
 .hud-panel { background: var(--hud-surface); border: 1px solid var(--hud-line); border-radius: 11px; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); }
 .hud-caption { font-size: 10px; font-weight: 600; color: var(--hud-muted); letter-spacing: 0.45px; white-space: nowrap; }
-.ride-top { position: absolute; top: max(16px, env(safe-area-inset-top)); left: max(16px, env(safe-area-inset-left)); right: max(16px, env(safe-area-inset-right)); display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.ride-top { position: absolute; top: max(16px, env(safe-area-inset-top)); left: max(16px, env(safe-area-inset-left)); right: max(16px, env(safe-area-inset-right)); display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 12px; }
+.ride-stats { display: flex; align-items: stretch; gap: 8px; }
 .ride-distance { padding: 11px 14px; display: flex; flex-direction: column; gap: 5px; min-width: 128px; }
 .distance-number { font-size: 24px; font-weight: 500; font-variant-numeric: tabular-nums; line-height: 1; }
 .distance-number small { font-size: 12px; color: var(--hud-muted); }
-.ride-menu { display: flex; align-items: center; justify-content: flex-end; gap: 7px; pointer-events: auto; }
+.ride-menu { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 7px; pointer-events: auto; }
+.bike-helmet-controls { display: flex; align-items: flex-start; gap: 7px; }
 .menu-item { display: flex; align-items: center; gap: 9px; padding: 6px 8px 6px 11px; min-height: 39px; }
 .fps-item { padding-right: 12px; }
 .fps-number { min-width: 23px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
@@ -31,17 +33,15 @@ button, select { font: inherit; }
 .ride-hud select:disabled { opacity: .6; cursor: wait; }
 .engine-state { color: rgba(239, 239, 223, .5); font-size: 9px; letter-spacing: .35px; white-space: nowrap; }
 .engine-state.engine-on { color: #d9d58e; }
-.ride-rider-tools { position: absolute; top: 94px; left: max(16px, env(safe-area-inset-left)); width: 128px; display: flex; flex-direction: column; gap: 6px; pointer-events: auto; }
-.helmet-item { flex-direction: column; align-items: stretch; gap: 5px; }
-.helmet-item select { width: 100%; max-width: 100%; }
+.helmet-item { position: relative; }
+.helmet-item select { max-width: 110px; }
 .helmet-status { font-size: 10px; color: var(--hud-muted); }
-.rider-debug-toggle { cursor: pointer; }
-.rider-debug-toggle input { accent-color: #d9d58e; }
+.helmet-item .helmet-status { position: absolute; top: calc(100% + 4px); right: 0; white-space: nowrap; padding: 4px 7px; border-radius: 5px; background: rgba(22, 27, 16, .7); }
 .engine-prompt { position: absolute; top: 76px; left: 50%; transform: translateX(-50%); padding: 8px 13px; border: 1px solid rgba(231, 232, 205, .24); border-radius: 8px; background: rgba(22, 27, 16, .55); backdrop-filter: blur(6px); color: #efefdf; font-size: 12px; white-space: nowrap; animation: engine-prompt-in .18s ease-out; }
 .engine-prompt kbd { color: #e5d98b; font-weight: 700; }
 @keyframes engine-prompt-in { from { opacity: 0; transform: translate(-50%, -5px); } to { opacity: 1; transform: translate(-50%, 0); } }
-.bike-notice { position: absolute; right: 0; top: 48px; padding: 9px 12px; font-size: 11px; }
-.ride-history { position: absolute; top: 110px; right: max(16px, env(safe-area-inset-right)); width: 228px; height: 270px; display: flex; flex-direction: column; overflow: hidden; pointer-events: auto; }
+.bike-notice { position: absolute; right: 0; top: calc(100% + 8px); padding: 9px 12px; font-size: 11px; }
+.ride-history { position: absolute; top: 140px; right: max(16px, env(safe-area-inset-right)); width: 228px; height: 270px; display: flex; flex-direction: column; overflow: hidden; pointer-events: auto; }
 .history-best { flex: 0 0 auto; padding: 13px 14px 12px; border-bottom: 1px solid var(--hud-line); background: rgba(22, 27, 16, .3); }
 .history-best .hud-caption { display: block; margin-bottom: 5px; }
 .history-best strong { display: block; font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.15; color: #f2efc9; }
@@ -51,7 +51,7 @@ button, select { font: inherit; }
 .history-record:first-child { color: #efefdf; background: rgba(229, 231, 207, .07); }
 .history-record span { color: #e7e6bb; }
 .history-empty { display: block; padding: 12px 14px; color: rgba(199, 200, 184, .68); font-size: 11px; }
-.ride-bottom-left { position: absolute; left: max(16px, env(safe-area-inset-left)); bottom: max(16px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: flex-start; gap: 9px; max-width: calc(100% - 120px); }
+.ride-bottom-left { position: absolute; left: max(16px, env(safe-area-inset-left)); bottom: max(16px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: flex-start; gap: 9px; max-width: calc(100% - 195px); }
 .ride-pitch { width: 274px; max-width: 100%; padding: 11px 13px 9px; }
 .pitch-heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
 .pitch-heading strong { font-weight: 500; font-size: 19px; font-variant-numeric: tabular-nums; }
@@ -66,9 +66,13 @@ button, select { font: inherit; }
 .ride-help kbd, .ride-crash kbd { font: inherit; font-weight: 600; color: #efefdf; }
 .help-mark { border: 1px solid var(--hud-line); border-radius: 50%; height: 16px; width: 16px; text-align: center; font-size: 10px; line-height: 14px; }
 .ride-help button { background: none; padding: 0; color: var(--hud-muted); font-size: 11px; font-weight: 400; }
-.ride-speed { position: absolute; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); padding: 11px 15px; display: flex; align-items: baseline; gap: 7px; }
-.ride-speed strong { font-size: 24px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.ride-speed { min-width: 82px; padding: 11px 14px; display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
+.ride-speed strong { font-size: 24px; line-height: 1; font-weight: 500; font-variant-numeric: tabular-nums; }
 .ride-speed .hud-caption { font-size: 9px; }
+.ride-links { position: absolute; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); display: flex; gap: 7px; pointer-events: auto; }
+.ride-link { display: inline-flex; align-items: center; justify-content: center; min-height: 35px; padding: 8px 14px; font-size: 12px; font-weight: 600; color: inherit; text-decoration: none; }
+.ride-link:hover { background: rgba(40, 47, 29, .72); }
+.ride-link:focus-visible { outline: 1px solid #d5cc87; outline-offset: 2px; }
 .ride-crash-overlay { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(12, 16, 9, .25); pointer-events: auto; padding: 20px; }
 .ride-crash { max-width: 360px; padding: 26px; text-align: center; background: rgba(22, 27, 16, .72); }
 .ride-crash h2 { margin: 12px 0; font-size: 26px; font-weight: 500; }
@@ -76,31 +80,36 @@ button, select { font: inherit; }
 .ride-crash button { margin-top: 20px; padding: 9px 18px; border-color: var(--hud-line); }
 .ride-crash kbd { margin-left: 14px; opacity: .6; }
 @media (max-width: 800px) {
-  .ride-top { gap: 8px; top: 10px; left: 10px; right: 10px; }
-  .ride-menu { flex-wrap: wrap; max-width: 440px; gap: 5px; }
+  .ride-top { grid-template-columns: 1fr; gap: 8px; top: 10px; left: 10px; right: 10px; }
+  .ride-menu { display: grid; grid-template-columns: auto auto auto; justify-content: end; gap: 5px; }
+  .bike-helmet-controls { grid-column: 1 / -1; grid-row: 2; justify-content: flex-end; gap: 5px; }
+  .sound-item { grid-column: 3; grid-row: 1; }
   .menu-item { gap: 6px; padding: 5px 7px; min-height: 35px; }
   .ride-distance { min-width: 112px; padding: 10px; }
-  .ride-rider-tools { top: 83px; left: 10px; width: 112px; }
-  .bike-notice { top: 84px; }
-  .ride-history { top: 128px; right: 10px; width: 202px; height: 228px; }
-  .ride-bottom-left { left: 10px; bottom: 10px; }
-  .ride-speed { right: 10px; bottom: 10px; }
+  .ride-history { top: 210px; right: 10px; width: 202px; height: 228px; }
+  .ride-bottom-left { left: 10px; bottom: calc(max(10px, env(safe-area-inset-bottom)) + 44px); max-width: calc(100% - 20px); }
+  .ride-links { right: max(10px, env(safe-area-inset-right)); bottom: max(10px, env(safe-area-inset-bottom)); }
 }
 @media (max-width: 520px) {
-  .ride-menu { max-width: 245px; }
   .ride-menu select { max-width: 148px; font-size: 11px; }
+  .ride-menu .bike-item select { max-width: 110px; }
+  .ride-menu .helmet-item select { max-width: 85px; }
+  .sound-item { gap: 4px; padding-inline: 5px; }
+  .engine-state { font-size: 8px; }
   .ride-menu .hud-caption { font-size: 9px; }
   .ride-distance { min-width: 96px; }
   .ride-distance .hud-caption { font-size: 9px; }
-  .ride-rider-tools { width: 96px; }
-  .rider-debug-toggle { gap: 4px; padding: 5px; }
-  .rider-debug-toggle .hud-caption { font-size: 8px; letter-spacing: 0; }
   .ride-bottom-left { max-width: calc(100% - 20px); }
   .ride-pitch { width: 230px; }
-  .ride-help { max-width: calc(100vw - 115px); font-size: 10px; gap: 3px 9px; }
+  .ride-help { max-width: 100%; font-size: 10px; gap: 3px 9px; }
   .ride-help button { font-size: 10px; }
-  .ride-speed { padding: 9px 10px; }
-  .ride-history { top: 122px; right: 10px; width: min(202px, calc(100vw - 20px)); height: 200px; }
+  .ride-speed { min-width: 74px; padding: 10px; }
+  .ride-history { width: min(202px, calc(100vw - 20px)); height: 200px; }
   .history-record { padding-inline: 10px; }
   .history-best { padding-inline: 10px; }
+}
+@media (max-width: 380px) {
+  .ride-menu .menu-item:not(.fps-item) { flex-direction: column; gap: 3px; }
+  .ride-menu .sound-item { display: grid; grid-template-columns: auto auto; align-items: center; }
+  .sound-item .engine-state { grid-column: 1 / -1; text-align: center; }
 }
