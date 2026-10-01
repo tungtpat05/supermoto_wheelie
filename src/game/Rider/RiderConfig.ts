@@ -28,7 +28,7 @@ export const RIDER_DEFAULTS = {
   shoulderWidth: 0.32,
   hipWidth: 0.20,
   torsoLength: 0.44,
-  torsoOffset: [0, 0.42, 0.14] as LocalPoint,
+  torsoOffset: [0, 1, 0] as LocalPoint, // Upright relative to the seat/bike, including wheelies.
   helmetAnchorOffset: [0, 0.14, 0] as LocalPoint,
 };
 
@@ -39,17 +39,17 @@ export const RIDER_DEBUG_ENABLED = false; // development only; also available in
 export const RIDER_CONFIGS: Record<string, RiderBikeConfig> = {
   fantasy_thunder_250: {
     seat: [0, 0.86, -0.15],
-    leftHandlebar: [0.23, 1.04, 0.30], rightHandlebar: [-0.23, 1.04, 0.30],
+    leftHandlebar: [0.28, 1.055, 0.15], rightHandlebar: [-0.28, 1.055, 0.15],
     leftFootPeg: [0.18, 0.35, -0.12], rightFootPeg: [-0.18, 0.35, -0.12],
   },
   fantic_xxf_450: {
     seat: [0, 0.86, -0.14],
-    leftHandlebar: [0.23, 1.04, 0.30], rightHandlebar: [-0.23, 1.04, 0.30],
+    leftHandlebar: [0.28, 1.06, 0.145], rightHandlebar: [-0.28, 1.06, 0.145],
     leftFootPeg: [0.18, 0.35, -0.13], rightFootPeg: [-0.18, 0.35, -0.13],
   },
   yamaha_yz_125: {
     seat: [0, 0.86, -0.15],
-    leftHandlebar: [0.23, 1.04, 0.30], rightHandlebar: [-0.23, 1.04, 0.30],
+    leftHandlebar: [0.28, 1.05, 0.15], rightHandlebar: [-0.28, 1.05, 0.15],
     leftFootPeg: [0.18, 0.34, -0.12], rightFootPeg: [-0.18, 0.34, -0.12],
   },
 };

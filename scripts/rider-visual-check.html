@@ -9,7 +9,7 @@ button,select{padding:6px}output{position:absolute;bottom:16px;left:16px;white-s
   <select aria-label="Bike"></select><select aria-label="Helmet"></select>
   <label><input type="checkbox" id="debug">Rider debug</label>
   <label><input type="checkbox" id="wheelie">Wheelie</label>
-  <button id="side">Other side</button><button id="front">Front view</button>
+  <button id="side">Other side</button><button id="front">Front view</button><button id="top">Top view</button>
 </nav><output>Loading</output>
 <script type="module">
 import * as THREE from 'three';
@@ -44,11 +44,14 @@ async function loadBike(){
 bikeSelect.onchange=loadBike;helmetSelect.onchange=attachHelmet;
 document.querySelector('#side').onclick=()=>{side*=-1;view='side'};
 document.querySelector('#front').onclick=()=>{view=view==='front'?'side':'front'};
+document.querySelector('#top').onclick=()=>{view=view==='top'?'side':'top'};
 await loadBike();
 function animate(){
   parts.rider.debug?.setEnabled(document.querySelector('#debug').checked);
   parts.bodyGroup.rotation.x=document.querySelector('#wheelie').checked?-.9:0;
-  if(view==='front')camera.position.set(.01,1,3.7);else camera.position.set(side*3.7,.9,.02);
+  camera.up.set(0,view==='top'?0:1,view==='top'?-1:0);
+  if(view==='top')camera.position.set(0,3.7,0);
+  else if(view==='front')camera.position.set(.01,1,3.7);else camera.position.set(side*3.7,.9,.02);
   camera.lookAt(0,.85,0);renderer.render(scene,camera);requestAnimationFrame(animate);
 }requestAnimationFrame(animate);
 </script></html>
