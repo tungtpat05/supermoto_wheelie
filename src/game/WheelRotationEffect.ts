@@ -3,9 +3,11 @@ import type { WheelOverlayConfig, WheelVisualConfig } from './WheelVisualConfig'
 
 export const WHEEL_EFFECT_SETTINGS = {
   enabled: true,
-  maxOpacity: 0.46,
-  fullBlurSpeed: 22, // m/s
-  opacityResponse: 8, // exponential smoothing, independent of FPS
+  minOpacity: 0.5, // Độ mờ rõ nét ngay khi vừa bắt đầu lăn bánh
+  maxOpacity: 0.98, // Độ mờ tối đa khi chạy nhanh
+  startBlurSpeed: 0.3, // m/s (~1 km/h) bắt đầu kích hoạt hiệu ứng
+  fullBlurSpeed: 12, // m/s (~43 km/h) đạt độ mờ tối đa
+  opacityResponse: 10, // exponential smoothing, independent of FPS
   rotationMultiplier: 1,
   frontCoastDeceleration: 5, // visual equivalent m/s² while airborne
 };
@@ -30,10 +32,11 @@ function createBlurTexture(): THREE.CanvasTexture {
       const spokes = Math.pow(0.5 + 0.5 * Math.cos(angle * 13 + radius * 3), 4);
       const arcs = (0.5 + 0.5 * Math.sin(radius * 75 + Math.sin(angle * 3)))
         * (0.5 + 0.5 * Math.cos(angle * 5 + radius * 9));
-      const shade = 130 + 65 * spokes + 20 * arcs;
+      // Dark graphite / smoked charcoal tone so the rotation blur is clearly defined
+      const shade = Math.round(35 + 45 * spokes + 20 * arcs);
       const offset = (y * size + x) * 4;
       pixels.data[offset] = pixels.data[offset + 1] = pixels.data[offset + 2] = shade;
-      pixels.data[offset + 3] = Math.round(255 * mask * (0.12 + 0.48 * spokes + 0.20 * arcs));
+      pixels.data[offset + 3] = Math.round(255 * mask * (0.16 + 0.54 * spokes + 0.22 * arcs));
     }
   }
   context.putImageData(pixels, 0, 0);
@@ -115,8 +118,20 @@ export class WheelRotationEffect {
 
   private updateWheel(wheel: WheelLayer, signedSpeed: number, delta: number) {
     const speed = Math.abs(signedSpeed);
-    const target = WHEEL_EFFECT_SETTINGS.maxOpacity
-      * THREE.MathUtils.smoothstep(speed, 0, WHEEL_EFFECT_SETTINGS.fullBlurSpeed);
+    let target = 0;
+    if (speed > WHEEL_EFFECT_SETTINGS.startBlurSpeed) {
+      const progress = THREE.MathUtils.clamp(
+        (speed - WHEEL_EFFECT_SETTINGS.startBlurSpeed)
+        / Math.max(0.001, WHEEL_EFFECT_SETTINGS.fullBlurSpeed - WHEEL_EFFECT_SETTINGS.startBlurSpeed),
+        0,
+        1,
+      );
+      target = THREE.MathUtils.lerp(
+        WHEEL_EFFECT_SETTINGS.minOpacity,
+        WHEEL_EFFECT_SETTINGS.maxOpacity,
+        progress,
+      );
+    }
     wheel.material.opacity = THREE.MathUtils.lerp(
       wheel.material.opacity, target, 1 - Math.exp(-WHEEL_EFFECT_SETTINGS.opacityResponse * delta),
     );
