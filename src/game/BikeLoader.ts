@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { getBikeConfig } from './BikeConfigs';
 import { createSupermotoBike, type SupermotoParts } from './SupermotoMesh';
 import { createStickmanRider } from './StickmanRider';
+import { WheelRotationEffect } from './WheelRotationEffect';
 
 // In-memory cache for raw loaded GLTF scenes to avoid re-fetching 26MB files
 const gltfSceneCache = new Map<string, THREE.Group>();
@@ -100,6 +101,10 @@ export async function loadBikeModel(
   clonedModel.scale.setScalar(transform.scale);
   bodyGroup.add(clonedModel);
 
+  const wheelRotationEffect = config.wheelVisualConfig
+    ? new WheelRotationEffect(clonedModel, config.wheelVisualConfig)
+    : undefined;
+
   // Stylized rider mannequin positioned on seat
   const riderGroup = createMotocrossRider(config.color);
   riderGroup.position.set(
@@ -144,5 +149,6 @@ export async function loadBikeModel(
     fenderTip,
     sparksEmitter,
     exhaustEmitter,
+    wheelRotationEffect,
   };
 }

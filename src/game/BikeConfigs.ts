@@ -1,3 +1,5 @@
+import { WHEEL_VISUAL_CONFIGS, type WheelVisualConfig } from './WheelVisualConfig';
+
 export interface BikePhysicsTuning {
   maxSpeed: number; accelerationPower: number; brakePower: number;
   throttlePitchTorque: number; leanPitchTorque: number; brakePitchTorque: number;
@@ -13,6 +15,7 @@ export interface BikeConfig {
   modelType: 'glb' | 'procedural'; modelUrl?: string;
   modelTransform: { scale: number; rotationY: number; offsetY: number; fenderTip: [number, number, number]; riderOffset: [number, number, number] };
   physics: BikePhysicsTuning;
+  wheelVisualConfig?: WheelVisualConfig;
 }
 
 const tunedModels: Record<string, Partial<Pick<BikeConfig, 'color' | 'engineCategory' | 'soundType' | 'modelTransform' | 'physics'>>> = {
@@ -33,7 +36,7 @@ function displayName(id: string): string {
 export const BIKES_DATABASE: BikeConfig[] = Object.entries(modelFiles).map(([path, modelUrl], index) => {
   const id = fileId(path); const tuned = tunedModels[id] || {};
   const engineCategory = tuned.engineCategory || (/(2t|2-stroke|two[_-]?stroke)/i.test(id) ? '2-Stroke' : '4-Stroke');
-  return { id, name: displayName(id), brand: id.split(/[_-]/)[0].toUpperCase(), engine: 'Dirt bike', engineCategory, color: tuned.color || ['#eab308', '#22c55e', '#a855f7', '#f97316'][index % 4], soundType: tuned.soundType || (engineCategory === '2-Stroke' ? '2stroke_heavy' : '4stroke_deep'), modelType: 'glb' as const, modelUrl, modelTransform: { ...genericTransform, ...tuned.modelTransform }, physics: { ...defaultPhysics, ...tuned.physics } };
+  return { id, name: displayName(id), brand: id.split(/[_-]/)[0].toUpperCase(), engine: 'Dirt bike', engineCategory, color: tuned.color || ['#eab308', '#22c55e', '#a855f7', '#f97316'][index % 4], soundType: tuned.soundType || (engineCategory === '2-Stroke' ? '2stroke_heavy' : '4stroke_deep'), modelType: 'glb' as const, modelUrl, modelTransform: { ...genericTransform, ...tuned.modelTransform }, physics: { ...defaultPhysics, ...tuned.physics }, wheelVisualConfig: WHEEL_VISUAL_CONFIGS[id] };
 }).sort((a, b) => a.name.localeCompare(b.name));
 
 export const DEFAULT_BIKE_ID = BIKES_DATABASE[0]?.id || '';

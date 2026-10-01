@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Wheel overlay visual check</title>
+<style>
+  body { margin: 0; background: #343b3c; color: #eee; font: 13px sans-serif; }
+  canvas { display: block; }
+  nav { position: absolute; inset: 12px 12px auto; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  button, select { padding: 6px; } output { position: absolute; bottom: 16px; left: 16px; white-space: pre; }
+</style>
+<nav>
+  <select aria-label="Model"></select>
+  <label>Speed <select aria-label="Speed"><option value="0">Stopped</option><option value="3">Low</option><option value="12">Medium</option><option value="25">High</option><option value="-12">Reverse</option></select></label>
+  <label><input type="checkbox" id="enabled" checked>Effect</label>
+  <label><input type="checkbox" id="lift">Wheelie</label>
+  <label><input type="checkbox" id="guides">Rim guides</label>
+  <button id="side">Other side</button>
+</nav>
+<output>Loading</output>
+<script type="module">
+  import * as THREE from 'three';
+  import { BIKES_DATABASE } from '/src/game/BikeConfigs.ts';
+  import { loadBikeModel } from '/src/game/BikeLoader.ts';
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color('#343b3c');
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x667777, 2));
+  const sun = new THREE.DirectionalLight(0xffffff, 2.5);
+  sun.position.set(3, 5, 2); scene.add(sun);
+  const renderer = new THREE.WebGLRenderer({antialias:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+  document.body.append(renderer.domElement);
+  const camera = new THREE.PerspectiveCamera(40, 1, .01, 100);
+  let side = 1;
+  function resize() { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
+  addEventListener('resize', resize); resize();
+  const modelSelect = document.querySelector('[aria-label="Model"]');
+  for (const bike of BIKES_DATABASE) modelSelect.add(new Option(bike.name, bike.id));
+  let parts;
+  let guides = [];
+  async function load() {
+    modelSelect.disabled = true;
+    if (parts) { scene.remove(parts.bikeGroup); parts.wheelRotationEffect?.dispose(); }
+    for (const guide of guides) { guide.geometry.dispose(); guide.material.dispose(); }
+    guides = [];
+    parts = await loadBikeModel(modelSelect.value);
+    scene.add(parts.bikeGroup);
+    for (const name of ['FrontWheelBlur', 'RearWheelBlur']) {
+      const pivot = parts.bikeGroup.getObjectByName(name);
+      for (const plane of [...pivot.children]) {
+        const ring = new THREE.Mesh(new THREE.RingGeometry(.98, 1, 64), new THREE.MeshBasicMaterial({color:0xff5599, side:THREE.DoubleSide, depthTest:false}));
+        ring.scale.setScalar(plane.scale.x); ring.position.copy(plane.position); ring.rotation.copy(plane.rotation);
+        ring.renderOrder = 2; pivot.add(ring); guides.push(ring);
+      }
+    }
+    modelSelect.disabled = false;
+  }
+  modelSelect.onchange = load;
+  document.querySelector('#side').onclick = () => { side *= -1; };
+  await load();
+  let previous = performance.now();
+  function animate(now) {
+    const delta = Math.min(.1, (now - previous) / 1000); previous = now;
+    const speed = Number(document.querySelector('[aria-label="Speed"]').value);
+    const lifted = document.querySelector('#lift').checked;
+    if (parts) {
+      parts.wheelRotationEffect.enabled = document.querySelector('#enabled').checked;
+      parts.wheelRotationEffect.update(delta, speed, !lifted);
+      parts.bodyGroup.rotation.x = lifted ? -.65 : 0;
+      for (const guide of guides) guide.visible = document.querySelector('#guides').checked;
+      camera.position.set(side * 3.7, .7, .02); camera.lookAt(0, .7, 0);
+      const front = parts.bikeGroup.getObjectByName('FrontWheelBlur');
+      const rear = parts.bikeGroup.getObjectByName('RearWheelBlur');
+      document.querySelector('output').textContent = `${modelSelect.value} | ${speed} m/s\nFront opacity: ${front.children[0].material.opacity.toFixed(3)} / angle: ${front.rotation.z.toFixed(2)}\nRear opacity: ${rear.children[0].material.opacity.toFixed(3)} / angle: ${rear.rotation.z.toFixed(2)}`;
+    }
+    renderer.render(scene, camera); requestAnimationFrame(animate);
+  }
+  requestAnimationFrame(animate);
+</script>
+</html>

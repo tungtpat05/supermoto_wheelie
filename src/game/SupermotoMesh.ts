@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createStickmanRider } from './StickmanRider';
+import type { WheelRotationEffect } from './WheelRotationEffect';
 
 export interface SupermotoParts {
   bikeGroup: THREE.Group;
@@ -10,6 +11,7 @@ export interface SupermotoParts {
   fenderTip: THREE.Vector3;
   sparksEmitter: THREE.Group;
   exhaustEmitter: THREE.Group;
+  wheelRotationEffect?: WheelRotationEffect;
 }
 
 export function createSupermotoBike(): SupermotoParts {

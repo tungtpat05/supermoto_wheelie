@@ -96,6 +96,7 @@ export const GameCanvas: React.FC = () => {
     physicsRef.current.setEngineRunning(false);
 
     if (bikePartsRef.current) {
+      bikePartsRef.current.wheelRotationEffect?.reset();
       bikePartsRef.current.bikeGroup.position.set(0, 0, 0);
       bikePartsRef.current.bodyGroup.rotation.set(0, 0, 0);
       bikePartsRef.current.riderGroup.position.copy(initialRiderPosRef.current);
@@ -119,6 +120,12 @@ export const GameCanvas: React.FC = () => {
       const newParts = await loadBikeModel(bikeId, (progress) => {
         setLoadProgress(Math.max(15, progress));
       });
+
+      if (!sceneRef.current) {
+        newParts.wheelRotationEffect?.dispose();
+        return;
+      }
+      bikePartsRef.current?.wheelRotationEffect?.dispose();
 
       if (newParts.riderGroup) {
         initialRiderPosRef.current.copy(newParts.riderGroup.position);
@@ -299,12 +306,16 @@ export const GameCanvas: React.FC = () => {
     // Load initial bike model
     loadBikeModel(initialBikeId, progress => { if (!disposed) setLoadProgress(progress); })
       .then((parts) => {
-        if (disposed) return;
+        if (disposed) {
+          parts.wheelRotationEffect?.dispose();
+          return;
+        }
         if (parts.riderGroup) {
           initialRiderPosRef.current.copy(parts.riderGroup.position);
         }
         if (sceneRef.current) {
           if (bikePartsRef.current) {
+            bikePartsRef.current.wheelRotationEffect?.dispose();
             sceneRef.current.remove(bikePartsRef.current.bikeGroup);
           }
           sceneRef.current.add(parts.bikeGroup);
@@ -393,6 +404,7 @@ export const GameCanvas: React.FC = () => {
       }
 
       const currentBikeParts = bikePartsRef.current;
+      currentBikeParts?.wheelRotationEffect?.update(delta, state.speed, state.pitch <= 0, state.isCrashed);
 
       if (state.isScrapingFender) {
         audioEngine.setScrapeVolume(0.35);
@@ -512,6 +524,9 @@ export const GameCanvas: React.FC = () => {
         container.removeChild(renderer.domElement);
       }
       environment.dispose();
+      bikePartsRef.current?.wheelRotationEffect?.dispose();
+      bikePartsRef.current = null;
+      sceneRef.current = null;
       renderer.dispose();
       rendererRef.current = null;
     };
