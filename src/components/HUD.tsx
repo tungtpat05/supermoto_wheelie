@@ -5,6 +5,7 @@ import { QUALITY_PRESETS, type GraphicsQuality } from '../game/GraphicsQuality';
 import type { PhysicsState } from '../game/PhysicsEngine';
 import type { WheelieHistoryRecord } from '../game/WheelieHistory';
 import { HELMETS_DATABASE } from '../game/Rider/HelmetConfig';
+import { CrashCountdown } from './CrashCountdown';
 
 interface HUDProps {
   physicsState: PhysicsState;
@@ -144,14 +145,7 @@ export const HUD: React.FC<HUDProps> = ({
         <a className="hud-panel ride-link" href="https://www.facebook.com/nguyentungtpat" target="_blank" rel="noopener noreferrer">Author</a>
       </nav>
 
-      {physicsState.isCrashed && <div className="ride-crash-overlay">
-        <section className="hud-panel ride-crash" role="dialog" aria-modal="true" aria-labelledby="crash-title">
-          <span className="hud-caption">THỬ LẠI MỘT VÒNG</span>
-          <h2 id="crash-title">Ngã xe rồi!</h2>
-          <p>{physicsState.crashReason}</p>
-          <button type="button" autoFocus onClick={onRestart}>Chạy lại <kbd>R</kbd></button>
-        </section>
-      </div>}
+      {physicsState.isCrashed && <CrashCountdown onRestart={onRestart} />}
     </div>
   );
 };

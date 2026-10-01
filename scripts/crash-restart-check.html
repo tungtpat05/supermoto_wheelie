@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="vi">
+<meta charset="utf-8">
+<title>Crash restart verification</title>
+<style>
+body{margin:0;background:#161910;color:#efefdf;font:13px Arial}
+nav{height:44px;display:flex;align-items:center;gap:12px;padding:0 12px;box-sizing:border-box}
+button{padding:5px 10px}iframe{display:block;border:0;width:100vw;height:calc(100vh - 44px)}
+</style>
+<nav><button id="verify">Kiểm tra tự restart</button><button id="crash">Ngã thử</button><output>Đang tải game</output></nav>
+<iframe src="/" title="Game kiểm tra"></iframe>
+<script type="module">
+// Development-only fixture: exercise the real game's keyboard controls and HUD.
+const frame = document.querySelector('iframe');
+const output = document.querySelector('output');
+const verify = document.querySelector('#verify');
+const crash = document.querySelector('#crash');
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+const doc = () => frame.contentDocument;
+const key = (code, type) => frame.contentWindow.dispatchEvent(new KeyboardEvent(type, {code, bubbles:true}));
+const countdown = () => doc().querySelector('.ride-crash-countdown strong')?.textContent;
+function assert(condition, message) { if (!condition) throw new Error(message); }
+async function until(predicate, timeout = 15000) {
+  const start = performance.now();
+  while (!predicate()) {
+    if (performance.now() - start > timeout) throw new Error('Timeout');
+    await wait(25);
+  }
+}
+async function fall() {
+  await until(() => doc()?.querySelector('[aria-label="Bike"]:not(:disabled)'));
+  key('KeyR', 'keydown'); key('KeyR', 'keyup');
+  key('ShiftLeft', 'keydown'); key('ShiftLeft', 'keyup');
+  key('KeyW', 'keydown');
+  try { await until(() => countdown()); }
+  finally { key('KeyW', 'keyup'); }
+}
+crash.onclick = async () => {
+  crash.disabled = true;
+  try { await fall(); output.textContent = 'Đếm ngược 3 → 2 → 1'; }
+  catch (error) { output.textContent = 'FAIL: ' + error.message; }
+  finally { crash.disabled = false; }
+};
+verify.onclick = async () => {
+  verify.disabled = crash.disabled = true;
+  try {
+    output.textContent = 'Đang kiểm tra';
+    await fall();
+    const started = performance.now();
+    const seen = new Set();
+    while (countdown()) { seen.add(countdown()); await wait(25); }
+    const elapsed = performance.now() - started;
+    assert([...seen].join(',') === '3,2,1', 'Phải hiển thị 3, 2, 1');
+    assert(elapsed >= 2850 && elapsed < 3500, 'Phải restart sau 3 giây');
+    assert(!doc().querySelector('[role="dialog"]'), 'Không được hiện popup');
+    assert(doc().querySelector('.ride-speed strong').textContent === '0', 'Vận tốc phải reset');
+    assert(doc().querySelector('.engine-state').textContent.includes('OFF'), 'Giữ cách restart hiện tại');
+    await fall();
+    await wait(350);
+    key('KeyR', 'keydown'); key('KeyR', 'keyup');
+    await until(() => !countdown());
+    // Start the engine again. A stale crash timer would incorrectly turn it OFF.
+    key('ShiftLeft', 'keydown'); key('ShiftLeft', 'keyup');
+    await wait(3100);
+    assert(doc().querySelector('.engine-state').textContent.includes('ON'), 'R phải hủy timer cũ');
+    key('KeyR', 'keydown'); key('KeyR', 'keyup');
+    output.textContent = `PASS: 3 → 2 → 1, tự restart (${Math.round(elapsed)} ms), R hủy timer cũ`;
+  } catch (error) {
+    key('KeyW', 'keyup');
+    output.textContent = 'FAIL: ' + error.message;
+  } finally { verify.disabled = crash.disabled = false; }
+};
+frame.onload = () => { output.textContent = 'Sẵn sàng'; };
+</script>
+</html>

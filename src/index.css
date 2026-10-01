@@ -63,7 +63,7 @@ button, select { font: inherit; }
 .pitch-warning { color: #f1d19a; }
 .ride-help { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 13px; padding: 7px 10px; font-size: 11px; line-height: 1.5; color: var(--hud-muted); pointer-events: auto; }
 .ride-help > span { white-space: nowrap; }
-.ride-help kbd, .ride-crash kbd { font: inherit; font-weight: 600; color: #efefdf; }
+.ride-help kbd { font: inherit; font-weight: 600; color: #efefdf; }
 .help-mark { border: 1px solid var(--hud-line); border-radius: 50%; height: 16px; width: 16px; text-align: center; font-size: 10px; line-height: 14px; }
 .ride-help button { background: none; padding: 0; color: var(--hud-muted); font-size: 11px; font-weight: 400; }
 .ride-speed { min-width: 82px; padding: 11px 14px; display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
@@ -73,12 +73,9 @@ button, select { font: inherit; }
 .ride-link { display: inline-flex; align-items: center; justify-content: center; min-height: 35px; padding: 8px 14px; font-size: 12px; font-weight: 600; color: inherit; text-decoration: none; }
 .ride-link:hover { background: rgba(40, 47, 29, .72); }
 .ride-link:focus-visible { outline: 1px solid #d5cc87; outline-offset: 2px; }
-.ride-crash-overlay { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(12, 16, 9, .25); pointer-events: auto; padding: 20px; }
-.ride-crash { max-width: 360px; padding: 26px; text-align: center; background: rgba(22, 27, 16, .72); }
-.ride-crash h2 { margin: 12px 0; font-size: 26px; font-weight: 500; }
-.ride-crash p { font-size: 13px; line-height: 1.6; color: var(--hud-muted); }
-.ride-crash button { margin-top: 20px; padding: 9px 18px; border-color: var(--hud-line); }
-.ride-crash kbd { margin-left: 14px; opacity: .6; }
+.ride-crash-countdown { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; text-shadow: 0 2px 12px rgba(0, 0, 0, .8); }
+.ride-crash-countdown .hud-caption { color: #efefdf; }
+.ride-crash-countdown strong { font-size: clamp(64px, 12vw, 96px); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
 @media (max-width: 800px) {
   .ride-top { grid-template-columns: 1fr; gap: 8px; top: 10px; left: 10px; right: 10px; }
   .ride-menu { display: grid; grid-template-columns: auto auto auto; justify-content: end; gap: 5px; }
