@@ -14,7 +14,10 @@ Built with **React 19**, **Three.js**, **TypeScript**, and **Vite**.
   - Live distance tracker recording your best and recent wheelie runs.
 - **Dynamic Procedural Steppe Environment**:
   - Endless seamless terrain tile recycling with height-mapped slopes and worn dirt tracks.
-  - High-performance instanced grass with LOD scaling (Low to Ultra quality presets).
+  - World-space grass/dry soil blending, multi-scale texture sampling, subtle bump detail and tire traces.
+  - Blue gradient sky, animated procedural clouds, three hazed ridgelines and warm afternoon sunlight.
+  - Instanced short grass rooted to the rendered triangles, streamed in a fixed pool around the rider.
+  - Low–Ultra density scaling and smooth distance fade; distant scrub leaves the central practice area open.
   - Procedural particle systems for 2-stroke/4-stroke exhaust haze, roost dust clouds, and scraping sparks.
 - **Stickman Rider with Two-Bone IK**:
   - Anatomically proportioned rider whose limbs mathematically lock onto handlebars and footpegs through all wheelies and lean angles.
@@ -102,6 +105,17 @@ node scripts/verify-steppe.mjs
 # Verify rider Two-Bone IK math, limb constraints, and helmet anchors
 node scripts/verify-rider.mjs
 ```
+
+With the dev server running, `/scripts/environment-visual-check.html` checks the
+rendering at 90 km/h, wheelie and side views, all quality presets, lateral riding,
+and a 12 km tile-recycling jump. Its camera/pose controls exist only in that check
+page. The production camera, physics, controls and HUD are unchanged.
+
+The environment reuses the bundled grass texture and HDR lighting asset. Clouds
+use a single sky material; grass uses opaque geometry and a fixed 7 × 7 chunk
+pool with 44–94 m visibility. There are no added postprocessing passes or runtime
+dependencies. `verify-steppe.mjs` also raycasts grass roots against the terrain and
+checks deterministic restart and disposal.
 
 ---
 

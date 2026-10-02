@@ -303,7 +303,8 @@ export const GameCanvas: React.FC = () => {
     renderer.shadowMap.enabled = preset.shadows;
     renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.0;
+    renderer.toneMappingExposure = 0.95;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.domElement.style.width = '100%';
     renderer.domElement.style.height = '100%';
     renderer.domElement.style.display = 'block';

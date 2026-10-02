@@ -1,18 +1,18 @@
 import * as THREE from 'three';
 import { HDRLoader } from 'three/examples/jsm/loaders/HDRLoader.js';
 import { RealisticParticleSystem } from './RealisticParticleSystem';
-import { terrainHeight, terrainWear } from './SteppeTerrain';
+import { terrainHeight } from './SteppeTerrain';
 import { QUALITY_PRESETS, type GraphicsQuality } from './GraphicsQuality';
+import { createGrasslandMaterial } from './GrasslandMaterial';
+import { createGrasslandSky, createGrasslandHills, SUN_DIRECTION } from './GrasslandSky';
+import { GrasslandVegetation } from './GrasslandVegetation';
 
 const LENGTH = 160;
 const COUNT = 12;
 const WIDTH = 2400;
-const GRASS_COUNT = 24000;
 interface TerrainTile {
   ground: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>;
-  grass: THREE.InstancedMesh;
-  seed: number;
-  fullGrassCount: number;
+  shrubs: THREE.InstancedMesh;
 }
 
 export class EnvironmentManager {
@@ -20,224 +20,167 @@ export class EnvironmentManager {
   private tiles: TerrainTile[] = [];
   private particleSystem: RealisticParticleSystem;
   private backdrop = new THREE.Group();
-  private sun = new THREE.DirectionalLight(0xffd296, 2.1);
+  private sun = new THREE.DirectionalLight(0xffefd9, 2.65);
+  private ambient = new THREE.HemisphereLight(0xc8dff5, 0x736c55, 1.05);
   private wind = { value: 0 };
+  private vegetation: GrasslandVegetation;
+  private sky: THREE.Mesh;
+  private groundTexture: THREE.Texture;
+  private environmentTexture: THREE.Texture | null = null;
   private disposed = false;
-  private quality: GraphicsQuality = 'High';
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
     this.particleSystem = new RealisticParticleSystem(scene);
+    this.sky = createGrasslandSky(this.wind);
+    this.groundTexture = new THREE.TextureLoader().load('/environment/textures/grass_color.jpg');
+    this.groundTexture.colorSpace = THREE.SRGBColorSpace;
+    this.groundTexture.wrapS = this.groundTexture.wrapT = THREE.RepeatWrapping;
+    this.groundTexture.anisotropy = 8;
     this.setupSkyAndLighting();
     this.createTerrain();
+    this.vegetation = new GrasslandVegetation(this.wind);
+    this.scene.add(this.vegetation.group);
+    this.update(0,0);
   }
 
   private setupSkyAndLighting() {
-    this.scene.fog = new THREE.FogExp2(0xdac8a4, 0.00105);
-    this.scene.add(new THREE.HemisphereLight(0xd6e3e4, 0x9c7846, 1.35));
+    this.scene.fog = new THREE.FogExp2(0xbfcfdc,.0007);
+    this.scene.add(this.ambient);
     this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(2048, 2048);
-    Object.assign(this.sun.shadow.camera, { near: 1, far: 240, left: -35, right: 35, top: 35, bottom: -35 });
-    this.sun.shadow.bias = -0.0003;
-    this.sun.shadow.normalBias = 0.035;
-    this.scene.add(this.sun, this.sun.target);
-    new HDRLoader().load('/environment/hdri/lebombo_1k.hdr', texture => {
+    this.sun.shadow.mapSize.set(2048,2048);
+    Object.assign(this.sun.shadow.camera,{near:1,far:240,left:-24,right:24,top:24,bottom:-24});
+    this.sun.shadow.camera.updateProjectionMatrix();
+    this.sun.shadow.bias = -.00015;
+    this.sun.shadow.normalBias = .022;
+    this.sun.shadow.radius = 2;
+    this.scene.add(this.sun,this.sun.target);
+    new HDRLoader().load('/environment/hdri/lebombo_1k.hdr',texture => {
       if (this.disposed) { texture.dispose(); return; }
       texture.mapping = THREE.EquirectangularReflectionMapping;
+      this.environmentTexture = texture;
       this.scene.environment = texture;
-      this.scene.environmentIntensity = 0.35;
+      this.scene.environmentIntensity = .25;
     });
-
-    const sky = new THREE.Mesh(new THREE.SphereGeometry(2000, 32, 20), new THREE.ShaderMaterial({
-      side: THREE.BackSide, depthWrite: false,
-      vertexShader: `varying vec3 vDirection;
-        void main() { vDirection = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }`,
-      fragmentShader: `varying vec3 vDirection;
-        void main() {
-          vec3 d = normalize(vDirection);
-          vec3 sky = mix(vec3(.65,.48,.29), vec3(.18,.38,.58), pow(max(d.y, 0.), .45));
-          float sun = max(dot(d, normalize(vec3(-.65,.22,.75))), 0.);
-          sky += vec3(.35,.21,.08) * pow(sun, 24.);
-          sky = mix(sky, vec3(1.,.91,.66), smoothstep(.99965,.99985,sun));
-          gl_FragColor = vec4(sky, 1.);
-          #include <tonemapping_fragment>
-          #include <colorspace_fragment>
-        }`,
-    }));
-    this.backdrop.add(sky);
-
-    // Two broad, irregular ridgelines keep the horizon distant without enclosing the rider.
-    for (let layer = 0; layer < 2; layer++) {
-      const geo = new THREE.PlaneGeometry(1, 1, 180, 10);
-      const p = geo.attributes.position;
-      for (let i = 0; i < p.count; i++) {
-        const u = (i % 181) / 180;
-        const v = Math.floor(i / 181) / 10;
-        const a = u * Math.PI * 2;
-        const r = 850 + layer * 350 + v * 280;
-        const peaks = 28 + 24 * Math.sin(a * 3 + layer) ** 2 + 48 * Math.sin(a * 5 - 1.2) ** 6;
-        p.setXYZ(i, Math.cos(a) * r, -14 + Math.sin(v * Math.PI) * peaks, Math.sin(a) * r);
-      }
-      geo.computeVertexNormals();
-      const hills = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
-        color: layer ? 0x8b9290 : 0x92917b, roughness: 1, side: THREE.DoubleSide,
-      }));
-      this.backdrop.add(hills);
-    }
-    this.scene.add(this.backdrop);
+    this.backdrop = createGrasslandHills();
+    this.scene.add(this.sky,this.backdrop);
   }
 
   private createTerrain() {
-    const material = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1 });
-    material.onBeforeCompile = (shader) => {
-      shader.vertexShader = 'varying vec3 vEarth;\n' + shader.vertexShader;
-      shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>',
-        '#include <begin_vertex>\nvEarth = (modelMatrix * vec4(position, 1.)).xyz;');
-      shader.fragmentShader = `varying vec3 vEarth;
-        float hash(vec2 p) { return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
-        float noise(vec2 p) {
-          vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
-          return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+1.),f.x),f.y);
-        }\n` + shader.fragmentShader;
-      shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `
-        #include <color_fragment>
-        vec2 p = vEarth.xz;
-        float track = p.x - sin(p.y*.008)*16. - sin(p.y*.023)*4.;
-        float ruts = exp(-pow((abs(track)-1.5)/.85,2.));
-        float clearing = max(0.,sin(p.x*.026+p.y*.016)*cos(p.y*.021-p.x*.013));
-        float wear = max(ruts*.94,max(exp(-pow(track/6.,2.))*.62,pow(clearing,3.)));
-        float patches = noise(p*.035)*.65 + noise(p*.19)*.35;
-        vec3 turf = mix(vec3(.23,.265,.105),vec3(.47,.405,.21),patches);
-        vec3 earth = mix(vec3(.39,.285,.155),vec3(.53,.405,.245),noise(p*.34));
-        float grain = .87 + .19*noise(p*8.) + .06*noise(p*29.);
-        diffuseColor.rgb *= mix(turf,earth,smoothstep(.12,.88,wear))*grain;
-      `);
-    };
-
-    // Each tuft has three tapered, slightly bent blades. Instances keep draw calls low.
-    const blade = new THREE.BufferGeometry();
-    const vertices: number[] = [];
-    for (let i = 0; i < 5; i++) {
-      const a = i * Math.PI / 2.5;
-      const x = Math.cos(a) * .022, z = Math.sin(a) * .022;
-      vertices.push(-x, 0, -z, x, 0, z, Math.cos(a) * .06, .7 + i * .07, Math.sin(a) * .06);
-    }
-    blade.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-    blade.computeVertexNormals();
-    const grassMat = new THREE.MeshStandardMaterial({ roughness: 1, side: THREE.DoubleSide });
-    grassMat.onBeforeCompile = (shader) => {
-      shader.uniforms.steppeTime = this.wind;
-      shader.vertexShader = 'uniform float steppeTime;\nvarying float vBladeHeight;\n' + shader.vertexShader;
-      shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `
-        #include <begin_vertex>
-        vBladeHeight = position.y;
-        transformed.x += sin(steppeTime*1.6 + instanceMatrix[3].x*.3 + instanceMatrix[3].z*.17)*.10*position.y*position.y;
-      `);
-      shader.fragmentShader = 'varying float vBladeHeight;\n' + shader.fragmentShader;
-      shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>',
-        '#include <color_fragment>\ndiffuseColor.rgb *= mix(vec3(.58,.60,.40),vec3(1.12,1.05,.79),vBladeHeight);');
-    };
+    const material = createGrasslandMaterial(this.groundTexture);
+    // A cheap underlay closes the view beyond the recycled tiles when orbiting
+    // backwards. It sits below the rideable surface and adds no contact geometry.
+    const apronGeo = new THREE.PlaneGeometry(4200,4200);
+    apronGeo.rotateX(-Math.PI/2);
+    const apron = new THREE.Mesh(apronGeo,material);
+    apron.name = 'Distant ground apron';
+    apron.position.y = -8;
+    // Let the riding tiles fill depth first so the hidden apron costs no shading.
+    apron.renderOrder = 1;
+    this.backdrop.add(apron);
+    const shrubGeo = new THREE.IcosahedronGeometry(1,1);
+    const shrubMat = new THREE.MeshStandardMaterial({color:0xffffff,roughness:1});
     for (let i = 0; i < COUNT; i++) {
-      const geo = new THREE.PlaneGeometry(WIDTH, LENGTH, 400, 40);
-      geo.rotateX(-Math.PI / 2);
-      const ground = new THREE.Mesh(geo, material);
+      // Preserve mesh resolution and the existing continuous rideable surface.
+      const geo = new THREE.PlaneGeometry(WIDTH,LENGTH,400,40);
+      geo.rotateX(-Math.PI/2);
+      const ground = new THREE.Mesh(geo,material);
+      ground.name = 'Rideable grassland';
       ground.receiveShadow = true;
-      const grass = new THREE.InstancedMesh(blade, grassMat, GRASS_COUNT);
-      grass.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      const tile = { ground, grass, seed: 1234 + i * 97, fullGrassCount: 0 };
+      const shrubs = new THREE.InstancedMesh(shrubGeo,shrubMat,54);
+      shrubs.name = 'Distant scrub islands';
+      const tile = {ground,shrubs};
       this.tiles.push(tile);
-      this.placeTile(tile, (i - 3) * LENGTH);
-      this.scene.add(ground, grass);
+      this.placeTile(tile,(i-3)*LENGTH);
+      this.scene.add(ground,shrubs);
     }
   }
 
   private placeTile(tile: TerrainTile, centerZ: number) {
     tile.ground.position.z = centerZ;
-    tile.grass.position.z = centerZ;
+    tile.shrubs.position.z = centerZ;
     const p = tile.ground.geometry.attributes.position;
-    for (let i = 0; i < p.count; i++) p.setY(i, terrainHeight(p.getX(i), p.getZ(i) + centerZ));
+    for (let i = 0; i < p.count; i++) p.setY(i,terrainHeight(p.getX(i),p.getZ(i)+centerZ));
     p.needsUpdate = true;
     tile.ground.geometry.computeVertexNormals();
     tile.ground.geometry.computeBoundingSphere();
-    let seed = tile.seed;
-    const random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
-    const dummy = new THREE.Object3D();
-    const color = new THREE.Color();
-    let count = 0;
-    for (let i = 0; i < GRASS_COUNT; i++) {
-      const x = (random() - .5) * 640, z = (random() - .5) * LENGTH;
-      const wear = terrainWear(x, z + centerZ);
-      if (random() < wear * .97) continue;
-      dummy.position.set(x, terrainHeight(x, z + centerZ) - .025, z);
-      dummy.rotation.y = random() * Math.PI * 2;
-      const height = .14 + random() * .23;
-      dummy.scale.set(.8 + random() * .7, height, .8 + random() * .7);
-      dummy.updateMatrix();
-      tile.grass.setMatrixAt(count, dummy.matrix);
-      color.setHSL(.13 + random() * .095, .27 + random() * .16, .26 + random() * .17);
-      tile.grass.setColorAt(count++, color);
+    // Stable world seed and distant, low scrub keep the central practice field open.
+    let seed = (Math.imul(centerZ/LENGTH,73537)^928371)>>>0;
+    const random = () => { seed = (Math.imul(seed,1664525)+1013904223)>>>0; return seed/4294967296; };
+    const dummy = new THREE.Object3D(), color = new THREE.Color();
+    for (let i = 0; i < 18; i++) {
+      const x = (i%2 ? -1:1)*(110+random()*370);
+      const z = (random()-.5)*LENGTH;
+      const size = 1+random()*1.8;
+      for (let lobe = 0; lobe < 3; lobe++) {
+        const lx = x+(lobe-1)*size*.65, lz = z+random()*size;
+        const height = size*(.38+random()*.2);
+        dummy.position.set(lx,terrainHeight(lx,lz+centerZ)+height*.65,lz);
+        dummy.rotation.set(random()*.2,random()*Math.PI,random()*.2);
+        dummy.scale.set(size*.7,height,size*.6);
+        dummy.updateMatrix();
+        tile.shrubs.setMatrixAt(i*3+lobe,dummy.matrix);
+        color.setHSL(.21+random()*.04,.18+random()*.14,.19+random()*.09);
+        tile.shrubs.setColorAt(i*3+lobe,color);
+      }
     }
-    tile.fullGrassCount = count;
-    tile.grass.count = Math.floor(count * QUALITY_PRESETS[this.quality].grassDensity);
-    tile.grass.instanceMatrix.needsUpdate = true;
-    if (tile.grass.instanceColor) tile.grass.instanceColor.needsUpdate = true;
-    tile.grass.computeBoundingSphere();
+    tile.shrubs.instanceMatrix.needsUpdate = true;
+    if (tile.shrubs.instanceColor) tile.shrubs.instanceColor.needsUpdate = true;
+    tile.shrubs.computeBoundingSphere();
   }
 
-  public emitExhaust(pos: THREE.Vector3, rpm: number, throttle: boolean, twoStroke: boolean, delta: number) {
-    this.particleSystem.emitExhaust(pos, rpm, throttle, twoStroke, delta);
+  public emitExhaust(pos: THREE.Vector3,rpm: number,throttle: boolean,twoStroke: boolean,delta: number) {
+    this.particleSystem.emitExhaust(pos,rpm,throttle,twoStroke,delta);
   }
-
-  public emitRidingDust(pos: THREE.Vector3, speed: number, throttle: boolean, delta: number) {
-    this.particleSystem.emitRidingDust(pos, speed, throttle, delta);
+  public emitRidingDust(pos: THREE.Vector3,speed: number,throttle: boolean,delta: number) {
+    this.particleSystem.emitRidingDust(pos,speed,throttle,delta);
   }
-
   public clearExhaust() { this.particleSystem.clearExhaust(); }
-
-  public emitSparks(pos: THREE.Vector3, count = 4) { this.particleSystem.emitSparks(pos, count); }
+  public emitSparks(pos: THREE.Vector3,count = 4) { this.particleSystem.emitSparks(pos,count); }
 
   public setQuality(quality: GraphicsQuality) {
-    this.quality = quality;
     const preset = QUALITY_PRESETS[quality];
     this.sun.castShadow = preset.shadows;
     if (this.sun.shadow.mapSize.x !== preset.shadowSize) {
       this.sun.shadow.map?.dispose();
       this.sun.shadow.map = null;
-      this.sun.shadow.mapSize.set(preset.shadowSize, preset.shadowSize);
+      this.sun.shadow.mapSize.set(preset.shadowSize,preset.shadowSize);
     }
-    this.tiles.forEach(tile => {
-      tile.grass.count = Math.floor(tile.fullGrassCount * preset.grassDensity);
-      tile.grass.computeBoundingSphere();
-    });
+    this.vegetation.setQuality(quality);
   }
 
   public reset() {
-    this.tiles.forEach((tile, i) => this.placeTile(tile, (i - 3) * LENGTH));
+    this.tiles.forEach((tile,i) => this.placeTile(tile,(i-3)*LENGTH));
     this.particleSystem.reset();
-    this.update(0, 0, 0);
+    this.update(0,0,0);
   }
 
-  public update(playerZ: number, delta: number, playerX = 0) {
+  public update(playerZ: number,delta: number,playerX = 0) {
     for (const tile of this.tiles) {
       let z = tile.ground.position.z;
-      while (z < playerZ - 3.5 * LENGTH) z += COUNT * LENGTH;
-      while (z > playerZ + 8.5 * LENGTH) z -= COUNT * LENGTH;
-      if (z !== tile.ground.position.z) this.placeTile(tile, z);
-      tile.grass.visible = Math.abs(z - playerZ) < QUALITY_PRESETS[this.quality].grassDistance + LENGTH / 2;
+      while (z < playerZ-3.5*LENGTH) z += COUNT*LENGTH;
+      while (z > playerZ+8.5*LENGTH) z -= COUNT*LENGTH;
+      if (z !== tile.ground.position.z) this.placeTile(tile,z);
     }
-    this.backdrop.position.set(playerX * .7, 0, playerZ);
-    this.sun.position.set(playerX - 65, 45, playerZ + 75);
-    this.sun.target.position.set(playerX, 0, playerZ);
+    this.vegetation.update(playerX,playerZ);
+    this.sky.position.set(playerX,0,playerZ);
+    // A little parallax in both axes makes the ridgelines feel distant, not painted.
+    this.backdrop.position.set(playerX+Math.sin(playerX*.0015)*50,0,playerZ+Math.sin(playerZ*.001)*40);
+    this.sun.target.position.set(playerX,terrainHeight(playerX,playerZ),playerZ);
+    this.sun.position.copy(this.sun.target.position).addScaledVector(SUN_DIRECTION,112);
     this.wind.value += delta;
     this.particleSystem.update(delta);
   }
 
   public dispose() {
     this.disposed = true;
-    this.scene.environment?.dispose();
+    if (this.scene.environment === this.environmentTexture) this.scene.environment = null;
+    this.environmentTexture?.dispose();
+    this.groundTexture.dispose();
+    this.vegetation.dispose();
     const geometries = new Set<THREE.BufferGeometry>();
     const materials = new Set<THREE.Material>();
-    for (const object of [...this.tiles.flatMap(t => [t.ground, t.grass]), this.backdrop]) {
+    for (const object of [...this.tiles.flatMap(t => [t.ground,t.shrubs]),this.backdrop,this.sky]) {
       object.traverse(child => {
         if (child instanceof THREE.Mesh) {
           geometries.add(child.geometry);
@@ -249,6 +192,7 @@ export class EnvironmentManager {
     }
     geometries.forEach(g => g.dispose());
     materials.forEach(m => m.dispose());
+    this.scene.remove(this.sun,this.sun.target,this.ambient);
     this.sun.dispose();
     this.particleSystem.dispose();
   }

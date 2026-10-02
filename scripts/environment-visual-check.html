@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>Grassland rendering check</title>
+<style>
+html,body{margin:0;overflow:hidden;font:13px system-ui;color:#fff;background:#17252e}canvas{display:block}
+nav{position:fixed;top:12px;left:12px;right:12px;display:flex;flex-wrap:wrap;gap:8px}button,select{padding:7px}
+output{position:fixed;bottom:12px;left:12px;white-space:pre;background:#15232dcc;padding:12px;border-radius:6px}
+</style>
+<nav><select aria-label="Quality"><option>Low</option><option>Medium</option><option selected>High</option><option>Ultra</option></select>
+<button id="drive">Drive at 90 km/h</button><button id="wheelie">Wheelie pose</button><button id="side">Side view</button>
+<button id="field">Open grassland</button><button id="jump">Jump to 12 km</button><button id="reset">Reset</button></nav>
+<output>Loading rendering check…</output>
+<script type="module">
+import * as THREE from 'three';
+import { EnvironmentManager } from '/src/game/EnvironmentManager.ts';
+import { terrainHeight } from '/src/game/SteppeTerrain.ts';
+import { QUALITY_PRESETS } from '/src/game/GraphicsQuality.ts';
+import { loadBikeModel } from '/src/game/BikeLoader.ts';
+import { DEFAULT_HELMET_ID } from '/src/game/Rider/HelmetConfig.ts';
+const scene=new THREE.Scene();
+const renderer=new THREE.WebGLRenderer({antialias:true});document.body.append(renderer.domElement);
+renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=.95;
+renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.shadowMap.type=THREE.PCFShadowMap;
+const camera=new THREE.PerspectiveCamera(60,1,.1,2400);
+const env=new EnvironmentManager(scene);
+const quality=document.querySelector('select');
+function setQuality(){const preset=QUALITY_PRESETS[quality.value];renderer.setPixelRatio(Math.min(devicePixelRatio,preset.pixelRatio));renderer.shadowMap.enabled=preset.shadows;env.setQuality(quality.value)}
+quality.onchange=setQuality;setQuality();
+function resize(){renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix()}
+addEventListener('resize',resize);resize();
+const parts=await loadBikeModel('yamaha_yz_125');scene.add(parts.bikeGroup);
+await parts.rider.setHelmet(DEFAULT_HELMET_ID);
+let x=0,z=0,driving=false,wheelie=false,side=false,previous=performance.now(),frames=0,elapsed=0,fps=0;
+document.querySelector('#drive').onclick=()=>{driving=!driving};
+document.querySelector('#wheelie').onclick=()=>{wheelie=!wheelie};
+document.querySelector('#side').onclick=()=>{side=!side};
+document.querySelector('#field').onclick=()=>{x=x?0:65};
+document.querySelector('#jump').onclick=()=>{z=12000};
+document.querySelector('#reset').onclick=()=>{x=z=0;driving=wheelie=side=false;env.reset()};
+const output=document.querySelector('output');
+function animate(now){
+  const dt=Math.min((now-previous)/1000,.05);previous=now;
+  if(driving)z+=25*dt;
+  const rear=terrainHeight(x,z-.85),front=terrainHeight(x,z+.85);
+  const slope=Math.atan2(front-rear,1.7),pitch=wheelie?.88:0;
+  parts.bikeGroup.position.set(x,rear+.85*Math.sin(pitch+slope),z);
+  parts.bodyGroup.rotation.x=-pitch-slope;
+  if(driving){parts.frontWheel.rotation.x+=25*dt*2.4;parts.rearWheel.rotation.x+=25*dt*2.4}
+  const targetY=rear+.85*Math.sin(slope)+1.1+pitch*.4,dist=4.8+pitch*.3;
+  camera.position.set(x+(side?4.5:0),targetY+Math.sin(.25)*dist,z-(side?2:Math.cos(.25)*dist));
+  camera.lookAt(x,targetY,z);
+  env.update(z,dt,x);renderer.render(scene,camera);
+  frames++;elapsed+=dt;
+  if(elapsed>.75){fps=Math.round(frames/elapsed);frames=0;elapsed=0;
+    const info=renderer.info;
+    output.textContent=`${quality.value} | ${driving?'90 km/h':'Stopped'} | x ${x}, z ${z.toFixed(0)} m | ${fps} FPS\n${info.render.calls} draw calls | ${info.render.triangles.toLocaleString()} triangles | ${info.memory.geometries} geometries | ${info.memory.textures} textures`;
+  }
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+addEventListener('pagehide',()=>{env.dispose();parts.rider.dispose();parts.wheelRotationEffect?.dispose();renderer.dispose()},{once:true});
+</script></html>
