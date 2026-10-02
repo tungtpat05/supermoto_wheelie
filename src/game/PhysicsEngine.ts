@@ -1,5 +1,11 @@
 import * as THREE from 'three';
 
+export const CRASH_TIP_DURATION = 0.14;
+export const CRASH_LAND_TIME = 0.92;
+const CRASH_TIP_ANGLE = THREE.MathUtils.degToRad(7);
+const CRASH_FALL_DRAG = 1.5;
+const CRASH_SLIDE_FRICTION = 8.5;
+
 export interface PhysicsState {
   speed: number; // m/s
   speedKmh: number; // km/h
@@ -38,6 +44,16 @@ export class PhysicsEngine {
   public crashReason: string = '';
   public crashTime: number = 0;
   public bikeCrashRotation: THREE.Vector3 = new THREE.Vector3();
+  public crashSide: -1 | 1 = 1;
+  public crashGrounded = false;
+  private crashStartPitch = 0;
+  private crashStartRoll = 0;
+  private crashLateralRatio = 0;
+  private readonly random: () => number;
+
+  constructor(random: () => number = Math.random) {
+    this.random = random;
+  }
 
   // Dynamic Physics Parameters (Tuned per selected bike)
   public maxSpeed: number = 25.5; // ~92 km/h (< 100 km/h)
@@ -91,11 +107,14 @@ export class PhysicsEngine {
     this.crashReason = '';
     this.crashTime = 0;
     this.bikeCrashRotation.set(0, 0, 0);
+    this.crashSide = 1;
+    this.crashGrounded = false;
+    this.crashStartPitch = this.crashStartRoll = this.crashLateralRatio = 0;
   }
 
   public setEngineRunning(running: boolean) {
     this.engineRunning = running;
-    if (!running) {
+    if (!running && !this.isCrashed) {
       this.speed = 0;
       this.pitch = 0;
       this.pitchVelocity = 0;
@@ -114,12 +133,7 @@ export class PhysicsEngine {
   ): PhysicsState {
     if (this.isCrashed) {
       this.wheelieDistance = 0;
-      this.crashTime += delta;
-      // Animate crash physics: bike rolls over and slides forward
-      this.speed = Math.max(0, this.speed - 12 * delta);
-      this.positionZ += this.speed * delta;
-      this.bikeCrashRotation.x -= 6 * delta; // Overturning loop out
-
+      this.updateCrash(delta);
       return this.getState();
     }
 
@@ -217,7 +231,9 @@ export class PhysicsEngine {
     // --- 4. Crash Detection (> 90 degrees loops out) ---
     if (this.pitch >= this.crashAngle) {
       this.pitch = this.crashAngle;
-      this.triggerCrash('Looped Out Backwards! (Pitch angle exceeded 90°)');
+      const forwardTravel = this.positionZ - previousZ;
+      const lateralRatio = forwardTravel > 0 ? (this.positionX - previousX) / forwardTravel : 0;
+      this.triggerCrash('Looped Out Backwards! (Pitch angle exceeded 90°)', lateralRatio);
     }
 
     this.wheelieDistance = this.pitch > 0 && !this.isCrashed
@@ -226,10 +242,52 @@ export class PhysicsEngine {
     return this.getState();
   }
 
-  private triggerCrash(reason: string) {
+  private triggerCrash(reason: string, lateralRatio: number) {
     this.isCrashed = true;
     this.crashReason = reason;
     this.crashTime = 0;
+    this.crashSide = this.random() < 0.5 ? -1 : 1;
+    this.crashGrounded = false;
+    this.crashStartPitch = this.pitch;
+    this.crashStartRoll = this.roll;
+    this.crashLateralRatio = lateralRatio;
+    this.pitchVelocity = this.rollVelocity = 0;
+    // Start at the actual wheelie pose, never at an unrelated zero rotation.
+    this.bikeCrashRotation.set(-this.pitch, 0, this.roll);
+  }
+
+  private updateCrash(delta: number) {
+    const dt = Math.max(0, delta);
+    // Split at impact, then integrate friction exactly, including the stop time.
+    // This preserves the incoming heading and gives the same slide at any FPS.
+    const fallingTime = Math.min(dt, Math.max(0, CRASH_LAND_TIME - this.crashTime));
+    const advance = (duration: number, deceleration: number) => {
+      const movingTime = Math.min(duration, this.speed / deceleration);
+      const distance = this.speed * movingTime - 0.5 * deceleration * movingTime ** 2;
+      this.positionZ += distance;
+      this.positionX = THREE.MathUtils.clamp(this.positionX + distance * this.crashLateralRatio, -200, 200);
+      this.speed = Math.max(0, this.speed - deceleration * duration);
+    };
+    advance(fallingTime, CRASH_FALL_DRAG);
+    advance(dt - fallingTime, CRASH_SLIDE_FRICTION);
+    this.crashTime += dt;
+
+    const previousPitch = this.pitch, previousRoll = this.roll;
+    const peakPitch = this.crashStartPitch + CRASH_TIP_ANGLE;
+    if (this.crashTime <= CRASH_TIP_DURATION) {
+      this.pitch = THREE.MathUtils.lerp(this.crashStartPitch, peakPitch,
+        THREE.MathUtils.smoothstep(this.crashTime, 0, CRASH_TIP_DURATION));
+    } else {
+      this.pitch = THREE.MathUtils.lerp(peakPitch, 0,
+        THREE.MathUtils.smoothstep(this.crashTime, CRASH_TIP_DURATION, CRASH_LAND_TIME));
+    }
+    this.roll = THREE.MathUtils.lerp(this.crashStartRoll, this.crashSide * Math.PI / 2,
+      THREE.MathUtils.smoothstep(this.crashTime, 0.07, CRASH_LAND_TIME));
+    this.crashGrounded = this.crashTime >= CRASH_LAND_TIME;
+    this.pitchVelocity = dt > 0 && !this.crashGrounded ? (this.pitch - previousPitch) / dt : 0;
+    this.rollVelocity = dt > 0 && !this.crashGrounded ? (this.roll - previousRoll) / dt : 0;
+    // Bounded pose, held exactly after side impact. No free angular integration.
+    this.bikeCrashRotation.set(-this.pitch, 0, this.roll);
   }
 
   public getState(): PhysicsState {

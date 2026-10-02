@@ -6,6 +6,14 @@ import { loadHelmet } from './HelmetLoader';
 
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
+interface CrashTransform {
+  object: THREE.Object3D;
+  ridePosition: THREE.Vector3;
+  rideRotation: THREE.Quaternion;
+  fallPosition: THREE.Vector3;
+  fallRotation: THREE.Quaternion;
+}
+
 export class StickRider {
   public readonly group = new THREE.Group();
   public readonly helmetAnchor = new THREE.Group();
@@ -17,6 +25,8 @@ export class StickRider {
   private helmetRequest = 0;
   private disposed = false;
   private attachedHelmetId = '';
+  private crashBlend = 0;
+  private crashTransforms: CrashTransform[] = [];
 
   constructor(config: RiderBikeConfig, accentColor: string | number) {
     this.group.name = 'StickRider';
@@ -84,6 +94,15 @@ export class StickRider {
       this.joint(`${side}Hand`, arm.end, 0.030 * scale, true);
       this.joint(`${side}Knee`, leg.joint, 0.034 * scale);
       this.joint(`${side}Foot`, leg.end, 0.035 * scale);
+      // Release the grips and bring elbows forward during a fall, so an extended
+      // elbow does not prop the entire rigid bike/rider assembly above the ground.
+      const tuckedHand = chest.clone().add(new THREE.Vector3(sign * .16, -.14, .12).multiplyScalar(scale));
+      const tuckedArm = solveTwoBoneIK(shoulder, tuckedHand, dimensions.upperArmLength * scale,
+        dimensions.forearmLength * scale, new THREE.Vector3(0, -.2, 1));
+      this.prepareCrashTransform(`${side}UpperArm`, shoulder, tuckedArm.joint);
+      this.prepareCrashTransform(`${side}Forearm`, tuckedArm.joint, tuckedArm.end);
+      this.prepareCrashTransform(`${side}Elbow`, tuckedArm.joint);
+      this.prepareCrashTransform(`${side}Hand`, tuckedArm.end);
       this.debug?.setPoint(`${side}Handlebar`, hand, arm.reachable);
       this.debug?.setPoint(`${side}FootPeg`, foot, leg.reachable);
     }
@@ -93,6 +112,29 @@ export class StickRider {
     this.helmetAnchor.position.copy(neck).add(anchorOffset.applyQuaternion(this.helmetAnchor.quaternion));
     this.debug?.setPoint('Seat', pelvis);
     this.debug?.setPoint('HelmetAnchor', this.helmetAnchor.position);
+  }
+
+  private prepareCrashTransform(name: string, from: THREE.Vector3, to?: THREE.Vector3) {
+    const object = this.group.getObjectByName(name)!;
+    const fallPosition = from.clone();
+    const fallRotation = object.quaternion.clone();
+    if (to) {
+      fallPosition.add(to).multiplyScalar(.5);
+      fallRotation.setFromUnitVectors(Y_AXIS, to.clone().sub(from).normalize());
+    }
+    this.crashTransforms.push({ object, ridePosition: object.position.clone(),
+      rideRotation: object.quaternion.clone(), fallPosition, fallRotation });
+  }
+
+  /** A bounded arm pose only; the rider remains attached to the falling bike. */
+  public setCrashPose(blend: number) {
+    blend = THREE.MathUtils.clamp(blend, 0, 1);
+    if (blend === this.crashBlend) return;
+    this.crashBlend = blend;
+    for (const pose of this.crashTransforms) {
+      pose.object.position.lerpVectors(pose.ridePosition, pose.fallPosition, blend);
+      pose.object.quaternion.slerpQuaternions(pose.rideRotation, pose.fallRotation, blend);
+    }
   }
 
   /** A request token prevents old asynchronous loads overwriting a new selection. */

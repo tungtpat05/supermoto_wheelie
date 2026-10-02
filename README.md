@@ -18,7 +18,7 @@ Built with **React 19**, **Three.js**, **TypeScript**, and **Vite**.
 
 - **Physics-Based Wheelie Dynamics**:
   - Realistic balance sweet spot (45° – 75°), acceleration lift-off, and rear fender scraping.
-  - Backwards loop-out crash detection (> 90°) with automatic 3-second countdown restart.
+  - Overbalance detection (> 90°), a bounded left/right side fall and friction-based forward slide, with automatic 3-second countdown restart.
   - Live distance tracker recording your best and recent wheelie runs.
 - **Dynamic Procedural Steppe Environment**:
   - Endless seamless terrain tile recycling with height-mapped slopes and worn dirt tracks.
@@ -112,7 +112,17 @@ node scripts/verify-steppe.mjs
 
 # Verify rider Two-Bone IK math, limb constraints, and helmet anchors
 node scripts/verify-rider.mjs
+
+# Verify bounded side falls, slide momentum, FPS independence and ground contact
+node scripts/verify-crash.mjs
 ```
+
+`/scripts/crash-visual-check.html` previews the tip, side fall, impact and slide on
+each bike. It can check all three models on both sides across seven fall stages.
+The crash tips back at most another 7°, settles onto its side in 0.92 seconds, and
+locks rotation on impact. Incoming travel direction is retained while ground
+friction brings the slide to rest. Arms tuck during the fall and return to the
+grips on restart; rider and bike stay together without a ragdoll solver.
 
 With the dev server running, `/scripts/environment-visual-check.html` checks the
 rendering at 90 km/h, wheelie and side views, all quality presets, lateral riding,

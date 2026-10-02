@@ -1,0 +1,37 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Side fall and slide check</title>
+<style>html,body{margin:0;overflow:hidden;background:#17232e;color:white;font:13px Arial}canvas{display:block}nav{position:fixed;top:12px;left:12px;display:flex;gap:8px;flex-wrap:wrap}button,select{padding:7px}output{position:fixed;bottom:12px;left:12px;white-space:pre;background:#17232edd;padding:12px}</style>
+<nav><select aria-label="Bike"></select><select aria-label="Fall side"><option value="-1">Left</option><option value="1">Right</option></select>
+<button data-time="0">Start</button><button data-time="0.14">Tip</button><button data-time="0.5">Fall</button><button data-time="0.92">Impact</button><button data-time="2">Slide</button><button id="play">Play fall</button><button id="angle">Other side</button><button id="verify">Verify all models</button></nav><output>Loading</output>
+<script type="module">
+import * as THREE from 'three';
+import { EnvironmentManager } from '/src/game/EnvironmentManager.ts';
+import { PhysicsEngine } from '/src/game/PhysicsEngine.ts';
+import { BikeCrashPose } from '/src/game/BikeCrashPose.ts';
+import { terrainHeight } from '/src/game/SteppeTerrain.ts';
+import { BIKES_DATABASE } from '/src/game/BikeConfigs.ts';
+import { loadBikeModel } from '/src/game/BikeLoader.ts';
+import { DEFAULT_HELMET_ID } from '/src/game/Rider/HelmetConfig.ts';
+const scene=new THREE.Scene(),renderer=new THREE.WebGLRenderer({antialias:true});document.body.append(renderer.domElement);
+renderer.setPixelRatio(Math.min(devicePixelRatio,1));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFShadowMap;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=.95;
+const camera=new THREE.PerspectiveCamera(50,1,.1,2400),env=new EnvironmentManager(scene);env.setQuality('Medium');
+function resize(){renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix()}addEventListener('resize',resize);resize();
+const bikeSelect=document.querySelector('[aria-label="Bike"]'),sideSelect=document.querySelector('[aria-label="Fall side"]');
+for(const bike of BIKES_DATABASE)bikeSelect.add(new Option(bike.name,bike.id));
+const controls={throttle:false,rearBrake:false,steerLeft:false,steerRight:false};
+let parts,physics,playing=false,viewSide=1,previous=performance.now(),contact='',verification='';const pose=new BikeCrashPose();
+function inspectContact(){parts.bikeGroup.updateMatrixWorld(true);let lowest=Infinity,name='';const p=new THREE.Vector3();parts.bodyGroup.traverseVisible(mesh=>{if(!mesh.isMesh)return;const attr=mesh.geometry.attributes.position;for(let i=0;i<attr.count;i+=Math.max(1,Math.floor(attr.count/1000))){p.fromBufferAttribute(attr,i).applyMatrix4(mesh.matrixWorld);const clearance=p.y-terrainHeight(p.x,p.z);if(clearance<lowest){lowest=clearance;name=mesh.name}}});contact=`Lowest sampled surface: ${lowest.toFixed(3)} m (${name}), origin: ${parts.bikeGroup.position.y.toFixed(3)} m`;return lowest}
+function seek(time){if(!parts)return;playing=false;physics=new PhysicsEngine(()=>sideSelect.value==='-1'?.1:.9);physics.speed=18;physics.pitch=physics.crashAngle;physics.update(0,controls);physics.update(time,controls);pose.reset();pose.update(parts,physics);inspectContact()}
+async function load(){bikeSelect.disabled=true;if(parts){scene.remove(parts.bikeGroup);parts.rider.dispose();parts.wheelRotationEffect?.dispose()};parts=await loadBikeModel(bikeSelect.value);scene.add(parts.bikeGroup);await parts.rider.setHelmet(DEFAULT_HELMET_ID);seek(0);bikeSelect.disabled=false}
+bikeSelect.onchange=load;sideSelect.onchange=()=>seek(0);
+for(const button of document.querySelectorAll('[data-time]'))button.onclick=()=>seek(Number(button.dataset.time));
+document.querySelector('#play').onclick=()=>{seek(0);playing=true};document.querySelector('#angle').onclick=()=>{viewSide*=-1};
+document.querySelector('#verify').onclick=async()=>{const button=document.querySelector('#verify');button.disabled=true;playing=false;let checked=0;try{for(const bike of BIKES_DATABASE){verification=`Checking ${bike.name}`;bikeSelect.value=bike.id;await load();for(const side of [-1,1]){sideSelect.value=String(side);for(const time of [0,.14,.35,.65,.92,1.5,2.5]){seek(time);const clearance=inspectContact();if(clearance<-.015||clearance>.12)throw new Error(`${bike.id}, side ${side}, t ${time}: clearance ${clearance.toFixed(3)} m`);checked++}}}verification=`PASS: ${checked} model / side / fall-stage contact checks`;seek(2)}catch(error){verification='FAIL: '+error.message}finally{button.disabled=false}};
+await load();
+function animate(now){const dt=Math.min((now-previous)/1000,.05);previous=now;
+ if(playing){physics.update(dt,controls);if(physics.crashTime>3.5)playing=false}pose.update(parts,physics);
+ const x=physics.positionX,z=physics.positionZ,y=terrainHeight(x,z);
+ camera.position.set(x+viewSide*5,y+2.3,z-4.8);camera.lookAt(x,y+.65,z);env.update(z,dt,x);renderer.render(scene,camera);
+ document.querySelector('output').textContent=`${physics.crashTime.toFixed(2)} s | ${physics.crashGrounded?'Grounded / rotation locked':'Falling'} | ${Math.round(physics.speed*3.6)} km/h\nPitch ${THREE.MathUtils.radToDeg(physics.pitch).toFixed(1)}° | Roll ${THREE.MathUtils.radToDeg(physics.roll).toFixed(1)}° | Travel ${z.toFixed(2)} m\n${contact}\n${verification}`;
+ requestAnimationFrame(animate)}requestAnimationFrame(animate);
+</script></html>

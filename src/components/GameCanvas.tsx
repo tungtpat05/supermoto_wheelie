@@ -4,6 +4,7 @@ import { createSupermotoBike, type SupermotoParts } from '../game/SupermotoMesh'
 import { EnvironmentManager } from '../game/EnvironmentManager';
 import { terrainHeight } from '../game/SteppeTerrain';
 import { PhysicsEngine, type PhysicsState } from '../game/PhysicsEngine';
+import { BikeCrashPose } from '../game/BikeCrashPose';
 import { audioEngine } from '../audio/AudioEngine';
 import { HUD } from './HUD';
 import { QUALITY_PRESETS, isGraphicsQuality, type GraphicsQuality } from '../game/GraphicsQuality';
@@ -377,6 +378,8 @@ export const GameCanvas: React.FC = () => {
     let hudUpdateTimer = 0;
     let fpsTime = 0;
     let fpsFrames = 0;
+    let wasCrashed = false;
+    const crashPose = new BikeCrashPose();
 
     // Animation Game Loop
     const animate = (time: number) => {
@@ -449,9 +452,10 @@ export const GameCanvas: React.FC = () => {
         state.pitch + (state.pitch > 0.05 ? terrainPitch : 0)
       );
       if (hudUpdateTimer === 0) setMeasuredPitchDeg(measuredPitchDeg);
-      if (state.isCrashed && physics.crashTime < 0.1) {
+      if (state.isCrashed && !wasCrashed) {
         audioEngine.playCrashSound();
       }
+      wasCrashed = state.isCrashed;
 
       // --- Update 3D Bike Mesh Position & Rotations ---
       if (currentBikeParts) {
@@ -459,6 +463,7 @@ export const GameCanvas: React.FC = () => {
         const rearWheelOffset = 0.85 * Math.sin(state.pitch + terrainPitch);
 
         if (!state.isCrashed) {
+          crashPose.reset();
           currentBikeParts.bikeGroup.position.set(state.positionX, rearHeight + rearWheelOffset, state.positionZ);
           // In Three.js: -pitch lifts front (+Z) up around rear axle (-Z)!
           currentBikeParts.bodyGroup.rotation.x = -state.pitch - terrainPitch;
@@ -470,8 +475,7 @@ export const GameCanvas: React.FC = () => {
 
           // Rider inherits bodyGroup's pose, so hands/feet remain on their anchors.
         } else {
-          currentBikeParts.bikeGroup.position.set(state.positionX, rearHeight + rearWheelOffset, state.positionZ);
-          currentBikeParts.bodyGroup.rotation.x = physics.bikeCrashRotation.x;
+          crashPose.update(currentBikeParts, physics);
         }
       }
 
