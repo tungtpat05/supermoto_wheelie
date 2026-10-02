@@ -1,5 +1,13 @@
 # Supermoto Wheelie 3D
 
+[![Live Demo](https://img.shields.io/badge/🎮_Play_Online-wheelietime.stup.id.vn-2ea44f?style=for-the-badge)](https://wheelietime.stup.id.vn)
+
+[![React 19](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
+[![Three.js](https://img.shields.io/badge/Three.js-r186-black?style=flat-square&logo=threedotjs&logoColor=white)](https://threejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-Ready-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Vite](https://img.shields.io/badge/Vite-Bundler-646CFF?style=flat-square&logo=vite&logoColor=white)](https://vite.dev/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
+
 A lightweight, high-performance 3D motorcycle wheelie simulator running directly in the browser with no plugins, servers, or databases required.
 
 Built with **React 19**, **Three.js**, **TypeScript**, and **Vite**.
